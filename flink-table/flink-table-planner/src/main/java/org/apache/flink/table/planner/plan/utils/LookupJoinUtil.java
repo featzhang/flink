@@ -42,7 +42,6 @@ import org.apache.flink.table.connector.source.lookup.PartialCachingAsyncLookupP
 import org.apache.flink.table.connector.source.lookup.PartialCachingLookupProvider;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.functions.AsyncBatchLookupFunction;
 import org.apache.flink.table.functions.AsyncLookupFunction;
 import org.apache.flink.table.functions.LookupFunction;
 import org.apache.flink.table.functions.UserDefinedFunction;
@@ -385,8 +384,7 @@ public final class LookupJoinUtil extends FunctionCallUtil {
      * Options for batch async lookup operations.
      *
      * <p>These options are extracted from {@link AsyncBatchLookupFunctionProvider} and used to
-     * configure the {@link
-     * org.apache.flink.streaming.api.operators.async.AsyncBatchWaitOperator}.
+     * configure the {@link org.apache.flink.streaming.api.operators.async.AsyncBatchWaitOperator}.
      */
     public static class BatchAsyncLookupOptions {
         private final int maxBatchSize;

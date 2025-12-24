@@ -19,10 +19,8 @@
 package org.apache.flink.table.runtime.operators.join.lookup;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.api.common.functions.DefaultOpenContext;
 import org.apache.flink.api.common.functions.RichFunction;
 import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.async.AsyncBatchFunction;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.table.data.RowData;
@@ -38,10 +36,11 @@ import java.util.List;
 /**
  * An adapter that wraps {@link AsyncBatchLookupJoinRunner} as an {@link AsyncBatchFunction}.
  *
- * <p>This adapter enables the Table API's batch async lookup join to use the streaming
- * {@link org.apache.flink.streaming.api.operators.async.AsyncBatchWaitOperator} for execution.
+ * <p>This adapter enables the Table API's batch async lookup join to use the streaming {@link
+ * org.apache.flink.streaming.api.operators.async.AsyncBatchWaitOperator} for execution.
  *
  * <p>The adapter translates between:
+ *
  * <ul>
  *   <li>{@code AsyncBatchFunction<RowData, RowData>} - the streaming interface
  *   <li>{@code AsyncBatchLookupJoinRunner} - the Table API lookup join implementation
@@ -106,9 +105,10 @@ public class AsyncBatchLookupJoinFunctionAdapter
     }
 
     @Override
-    public void open(Configuration parameters) throws Exception {
-        ClassLoader userCodeClassLoader = runtimeContext.getUserCodeClassLoader();
-        runner.open(DefaultOpenContext.INSTANCE, userCodeClassLoader);
+    public void open(org.apache.flink.api.common.functions.OpenContext openContext)
+            throws Exception {
+        this.runtimeContext = getRuntimeContext();
+        runner.open(openContext, getClass().getClassLoader());
     }
 
     @Override
@@ -126,9 +126,14 @@ public class AsyncBatchLookupJoinFunctionAdapter
         return runtimeContext;
     }
 
-    /**
-     * Returns the underlying runner for testing.
-     */
+    @Override
+    public org.apache.flink.api.common.functions.IterationRuntimeContext
+            getIterationRuntimeContext() {
+        throw new UnsupportedOperationException(
+                "Iteration runtime context is not supported for async batch lookup join");
+    }
+
+    /** Returns the underlying runner for testing. */
     public AsyncBatchLookupJoinRunner getRunner() {
         return runner;
     }

@@ -19,6 +19,7 @@
 package org.apache.flink.table.functions;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.table.annotation.DataTypeHint;
 import org.apache.flink.table.annotation.FunctionHint;
 import org.apache.flink.table.catalog.DataTypeFactory;
@@ -104,7 +105,7 @@ import java.util.concurrent.CompletableFuture;
  * @param <T> The type of the output row used during reflective extraction.
  */
 @PublicEvolving
-public abstract class AsyncTableFunction<T> extends UserDefinedFunction {
+public abstract class AsyncTableFunction<T> extends UserDefinedFunction implements Function {
 
     @Override
     public final FunctionKind getKind() {

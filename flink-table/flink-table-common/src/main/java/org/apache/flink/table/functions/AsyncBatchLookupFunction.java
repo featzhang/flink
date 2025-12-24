@@ -19,10 +19,12 @@
 package org.apache.flink.table.functions;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.data.RowData;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -77,7 +79,8 @@ import java.util.concurrent.CompletableFuture;
  * @see LookupTableSource
  */
 @PublicEvolving
-public abstract class AsyncBatchLookupFunction extends AsyncTableFunction<RowData> {
+public abstract class AsyncBatchLookupFunction extends AsyncTableFunction<RowData>
+        implements Function, Serializable {
 
     /**
      * Asynchronously lookup rows matching a batch of lookup keys.

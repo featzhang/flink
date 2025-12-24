@@ -47,10 +47,11 @@ import java.util.Map;
  * A batch-oriented async lookup join runner that processes multiple lookup keys together.
  *
  * <p>This runner is designed for AI/ML inference scenarios where batching lookups can significantly
- * improve throughput. It wraps an {@link AsyncBatchLookupFunction} and integrates with the SQL/Table
- * API temporal join semantics.
+ * improve throughput. It wraps an {@link AsyncBatchLookupFunction} and integrates with the
+ * SQL/Table API temporal join semantics.
  *
  * <p>The runner buffers incoming lookup requests and invokes the batch lookup function when:
+ *
  * <ul>
  *   <li>The buffer reaches the configured maximum batch size
  *   <li>A timeout is reached (handled by the upstream operator)
@@ -120,6 +121,7 @@ public class AsyncBatchLookupJoinRunner implements Serializable {
      * Processes a batch of input rows asynchronously.
      *
      * <p>This method:
+     *
      * <ol>
      *   <li>Filters inputs using the pre-filter condition
      *   <li>Groups lookup keys
@@ -226,15 +228,15 @@ public class AsyncBatchLookupJoinRunner implements Serializable {
         // Note: In the current simple implementation, we assume each lookup result
         // can be matched back to its input. For more complex scenarios,
         // the AsyncBatchLookupFunction should return results in a structured way.
-        
+
         // For now, we use a simple approach: distribute results to inputs
         // This is a simplified implementation - real implementations should
         // track which results belong to which inputs
-        
+
         // Process each original input
         for (int i = 0; i < allInputs.size(); i++) {
             RowData input = allInputs.get(i);
-            
+
             if (bypassedInputs.containsKey(i)) {
                 // Input didn't pass pre-filter
                 if (isLeftOuterJoin) {
@@ -244,14 +246,14 @@ public class AsyncBatchLookupJoinRunner implements Serializable {
                 // Input passed pre-filter - apply join condition and emit results
                 // For simplicity, we apply the join condition result future
                 List<RowData> matchedResults = new ArrayList<>();
-                
+
                 for (RowData rightRow : convertedResults) {
                     // Apply join condition
                     joinConditionResultFuture.setInput(input);
                     DelegatingResultCollector collector = new DelegatingResultCollector();
                     joinConditionResultFuture.setResultFuture(collector);
                     joinConditionResultFuture.complete(Collections.singletonList(rightRow));
-                    
+
                     if (collector.getResults() != null && !collector.getResults().isEmpty()) {
                         for (RowData matched : collector.getResults()) {
                             matchedResults.add(
@@ -259,7 +261,7 @@ public class AsyncBatchLookupJoinRunner implements Serializable {
                         }
                     }
                 }
-                
+
                 if (matchedResults.isEmpty() && isLeftOuterJoin) {
                     results.add(new JoinedRowData(input.getRowKind(), input, nullRow));
                 } else {
@@ -288,23 +290,30 @@ public class AsyncBatchLookupJoinRunner implements Serializable {
         }
     }
 
-    /**
-     * Returns the underlying batch lookup function for testing.
-     */
+    /** Returns the underlying batch lookup function for testing. */
     @VisibleForTesting
     public AsyncBatchLookupFunction getFetcher() {
         return fetcher;
     }
 
-    /**
-     * A simple result collector for capturing join condition results.
-     */
+    /** A simple result collector for capturing join condition results. */
     private static class DelegatingResultCollector implements ResultFuture<RowData> {
         private Collection<RowData> results;
 
         @Override
         public void complete(Collection<RowData> result) {
             this.results = result;
+        }
+
+        @Override
+        public void complete(
+                org.apache.flink.streaming.api.functions.async.CollectionSupplier<RowData>
+                        supplier) {
+            try {
+                this.results = supplier.get();
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to get results from supplier", e);
+            }
         }
 
         @Override
