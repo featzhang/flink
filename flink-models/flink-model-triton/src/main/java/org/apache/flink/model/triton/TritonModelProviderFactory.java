@@ -64,6 +64,7 @@ public class TritonModelProviderFactory implements ModelProviderFactory {
         set.add(AbstractTritonModelFunction.TIMEOUT);
         set.add(AbstractTritonModelFunction.MAX_RETRIES);
         set.add(AbstractTritonModelFunction.BATCH_SIZE);
+        set.add(AbstractTritonModelFunction.FLATTEN_BATCH_DIM);
         set.add(AbstractTritonModelFunction.PRIORITY);
         set.add(AbstractTritonModelFunction.SEQUENCE_ID);
         set.add(AbstractTritonModelFunction.SEQUENCE_START);

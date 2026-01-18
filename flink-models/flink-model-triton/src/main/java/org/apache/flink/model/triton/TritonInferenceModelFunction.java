@@ -18,11 +18,14 @@
 package org.apache.flink.model.triton;
 
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryStringData;
 import org.apache.flink.table.factories.ModelProviderFactory;
 import org.apache.flink.table.functions.AsyncPredictFunction;
+import org.apache.flink.table.types.logical.ArrayType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.VarCharType;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -54,13 +57,31 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
             MediaType.get("application/json; charset=utf-8");
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
+    private final LogicalType inputType;
+    private final LogicalType outputType;
+    private final String inputName;
+    private final String outputName;
+
     public TritonInferenceModelFunction(
             ModelProviderFactory.Context factoryContext, ReadableConfig config) {
         super(factoryContext, config);
+
+        // Validate and store input/output types
         validateSingleColumnSchema(
                 factoryContext.getCatalogModel().getResolvedOutputSchema(),
-                new VarCharType(VarCharType.MAX_LENGTH),
+                null, // Allow any supported type
                 "output");
+
+        // Get input and output column information
+        Column inputColumn =
+                factoryContext.getCatalogModel().getResolvedInputSchema().getColumns().get(0);
+        Column outputColumn =
+                factoryContext.getCatalogModel().getResolvedOutputSchema().getColumns().get(0);
+
+        this.inputType = inputColumn.getDataType().getLogicalType();
+        this.outputType = outputColumn.getDataType().getLogicalType();
+        this.inputName = inputColumn.getName();
+        this.outputName = outputColumn.getName();
     }
 
     @Override
@@ -68,7 +89,7 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
         CompletableFuture<Collection<RowData>> future = new CompletableFuture<>();
 
         try {
-            String requestBody = buildInferenceRequest(rowData.getString(0).toString());
+            String requestBody = buildInferenceRequest(rowData);
             String url =
                     TritonUtils.buildInferenceUrl(getEndpoint(), getModelName(), getModelVersion());
 
@@ -123,16 +144,26 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
                                                     response.body() != null
                                                             ? response.body().string()
                                                             : "Unknown error";
+
+                                            // Enhanced error message with shape information
+                                            String errorMsg =
+                                                    String.format(
+                                                            "Triton inference failed with status %d: %s%n"
+                                                                    + "Input type: %s, Input name: %s%n"
+                                                                    + "Hint: Check if your Flink input type matches the Triton model's expected input shape. "
+                                                                    + "For scalar inputs, use INT/FLOAT/STRING etc.; for array inputs, use ARRAY<type>.",
+                                                            response.code(),
+                                                            errorBody,
+                                                            inputType,
+                                                            inputName);
+
                                             future.completeExceptionally(
-                                                    new RuntimeException(
-                                                            "Triton inference failed with status "
-                                                                    + response.code()
-                                                                    + ": "
-                                                                    + errorBody));
+                                                    new RuntimeException(errorMsg));
                                             return;
                                         }
 
                                         String responseBody = response.body().string();
+                                        LOG.info("Triton inference response: {}", responseBody);
                                         Collection<RowData> result =
                                                 parseInferenceResponse(responseBody);
                                         future.complete(result);
@@ -153,7 +184,7 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
         return future;
     }
 
-    private String buildInferenceRequest(String inputText) throws JsonProcessingException {
+    private String buildInferenceRequest(RowData rowData) throws JsonProcessingException {
         ObjectNode requestNode = objectMapper.createObjectNode();
 
         // Add request ID if sequence ID is provided
@@ -179,15 +210,32 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
         // Add inputs
         ArrayNode inputsArray = objectMapper.createArrayNode();
         ObjectNode inputNode = objectMapper.createObjectNode();
-        inputNode.put("name", "INPUT_TEXT"); // This might need to be configurable
-        inputNode.put("datatype", "BYTES");
+        inputNode.put("name", inputName.toUpperCase());
+
+        // Map Flink type to Triton type
+        TritonDataType tritonType = TritonTypeMapper.toTritonDataType(inputType);
+        inputNode.put("datatype", tritonType.getTritonName());
+
+        // Serialize input data first to get actual size
+        ArrayNode dataArray = objectMapper.createArrayNode();
+        TritonTypeMapper.serializeToJsonArray(rowData, 0, inputType, dataArray);
+
+        // Calculate and add shape based on actual data
+        int[] shape = TritonTypeMapper.calculateShape(inputType, 1, rowData, 0);
+
+        // Apply flatten-batch-dim if configured
+        if (isFlattenBatchDim() && shape.length > 1 && shape[0] == 1) {
+            // Remove the batch dimension: [1, N] -> [N]
+            int[] flattenedShape = new int[shape.length - 1];
+            System.arraycopy(shape, 1, flattenedShape, 0, flattenedShape.length);
+            shape = flattenedShape;
+        }
 
         ArrayNode shapeArray = objectMapper.createArrayNode();
-        shapeArray.add(1); // Batch size
+        for (int dim : shape) {
+            shapeArray.add(dim);
+        }
         inputNode.set("shape", shapeArray);
-
-        ArrayNode dataArray = objectMapper.createArrayNode();
-        dataArray.add(inputText);
         inputNode.set("data", dataArray);
 
         inputsArray.add(inputNode);
@@ -196,11 +244,24 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
         // Add outputs (request all outputs)
         ArrayNode outputsArray = objectMapper.createArrayNode();
         ObjectNode outputNode = objectMapper.createObjectNode();
-        outputNode.put("name", "OUTPUT_TEXT"); // This might need to be configurable
+        outputNode.put("name", outputName.toUpperCase());
         outputsArray.add(outputNode);
         requestNode.set("outputs", outputsArray);
 
-        return objectMapper.writeValueAsString(requestNode);
+        String requestJson = objectMapper.writeValueAsString(requestNode);
+
+        // Log the request for debugging
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(
+                    "Triton inference request - Model: {}, Version: {}, Input: {}, Shape: {}",
+                    getModelName(),
+                    getModelVersion(),
+                    inputName,
+                    java.util.Arrays.toString(shape));
+            LOG.debug("Request body: {}", requestJson);
+        }
+
+        return requestJson;
     }
 
     private Collection<RowData> parseInferenceResponse(String responseBody)
@@ -208,22 +269,48 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
         JsonNode responseNode = objectMapper.readTree(responseBody);
         List<RowData> results = new ArrayList<>();
 
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Triton response body: {}", responseBody);
+        }
+
         JsonNode outputsNode = responseNode.get("outputs");
         if (outputsNode != null && outputsNode.isArray()) {
             for (JsonNode outputNode : outputsNode) {
                 JsonNode dataNode = outputNode.get("data");
+
                 if (dataNode != null && dataNode.isArray()) {
-                    for (JsonNode dataItem : dataNode) {
-                        String outputText = dataItem.asText();
-                        results.add(GenericRowData.of(BinaryStringData.fromString(outputText)));
+                    if (dataNode.size() > 0) {
+                        // Check if output is array type or scalar
+                        // If outputType is scalar but dataNode is array, extract first element
+                        JsonNode nodeToDeserialize = dataNode;
+                        if (!(outputType instanceof ArrayType) && dataNode.isArray()) {
+                            // Scalar type - extract first element from array
+                            nodeToDeserialize = dataNode.get(0);
+                            if (LOG.isDebugEnabled()) {
+                                LOG.debug("Extracting scalar value from array[0]");
+                            }
+                        }
+
+                        Object deserializedData =
+                                TritonTypeMapper.deserializeFromJson(nodeToDeserialize, outputType);
+
+                        results.add(GenericRowData.of(deserializedData));
                     }
                 }
             }
+        } else {
+            LOG.warn("No outputs found in Triton response");
         }
 
-        // If no outputs found, return empty result
+        // If no outputs found, return default value based on type
         if (results.isEmpty()) {
-            results.add(GenericRowData.of(BinaryStringData.fromString("")));
+            Object defaultValue;
+            if (outputType instanceof VarCharType) {
+                defaultValue = BinaryStringData.fromString("");
+            } else {
+                defaultValue = null;
+            }
+            results.add(GenericRowData.of(defaultValue));
         }
 
         return results;

@@ -7,6 +7,7 @@ This module provides integration between Apache Flink and NVIDIA Triton Inferenc
 - **REST API Integration**: Communicates with Triton Inference Server via HTTP/REST API
 - **Asynchronous Processing**: Non-blocking inference requests for high throughput
 - **Flexible Configuration**: Comprehensive configuration options for various use cases
+- **Multi-Type Support**: Supports various input/output data types (STRING, INT, FLOAT, DOUBLE, ARRAY, etc.)
 - **Error Handling**: Built-in retry mechanisms and error handling
 - **Resource Management**: Efficient HTTP client pooling and resource management
 
@@ -38,7 +39,7 @@ This module provides integration between Apache Flink and NVIDIA Triton Inferenc
 
 ## Usage Example
 
-### SQL DDL
+### Basic Text Processing
 
 ```sql
 CREATE MODEL my_triton_model (
@@ -51,6 +52,34 @@ CREATE MODEL my_triton_model (
   'model-version' = '1',
   'timeout' = '10000',
   'max-retries' = '5'
+);
+```
+
+### Image Classification with Array Input
+
+```sql
+CREATE MODEL image_classifier (
+  image_data ARRAY<FLOAT>,
+  predictions ARRAY<FLOAT>
+) WITH (
+  'provider' = 'triton',
+  'endpoint' = 'http://localhost:8000/v2/models',
+  'model-name' = 'resnet50',
+  'model-version' = '1'
+);
+```
+
+### Numeric Prediction
+
+```sql
+CREATE MODEL numeric_model (
+  features ARRAY<DOUBLE>,
+  score FLOAT
+) WITH (
+  'provider' = 'triton',
+  'endpoint' = 'http://localhost:8000/v2/models',
+  'model-name' = 'linear-regression',
+  'model-version' = 'latest'
 );
 ```
 
@@ -80,7 +109,45 @@ Table result = tableEnv.sqlQuery(
 );
 ```
 
-### Advanced Configuration
+## Supported Data Types
+
+The Triton integration supports the following Flink data types:
+
+| Flink Type | Triton Type | Description |
+|------------|-------------|-------------|
+| `BOOLEAN` | `BOOL` | Boolean values |
+| `TINYINT` | `INT8` | 8-bit signed integer |
+| `SMALLINT` | `INT16` | 16-bit signed integer |
+| `INT` | `INT32` | 32-bit signed integer |
+| `BIGINT` | `INT64` | 64-bit signed integer |
+| `FLOAT` | `FP32` | 32-bit floating point |
+| `DOUBLE` | `FP64` | 64-bit floating point |
+| `STRING` / `VARCHAR` | `BYTES` | String/text data |
+| `ARRAY<T>` | `TYPE[]` | Array of any supported type |
+
+### Type Mapping Examples
+
+```sql
+-- String input/output (text processing)
+CREATE MODEL text_model (
+  text STRING,
+  result STRING
+) WITH ('provider' = 'triton', ...);
+
+-- Array input/output (image processing, embeddings)
+CREATE MODEL embedding_model (
+  text STRING,
+  embedding ARRAY<FLOAT>
+) WITH ('provider' = 'triton', ...);
+
+-- Numeric computation
+CREATE MODEL regression_model (
+  features ARRAY<DOUBLE>,
+  prediction DOUBLE
+) WITH ('provider' = 'triton', ...);
+```
+
+## Advanced Configuration
 
 ```sql
 CREATE MODEL advanced_triton_model (

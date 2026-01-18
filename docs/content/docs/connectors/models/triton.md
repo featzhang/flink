@@ -109,6 +109,40 @@ WITH (
 );
 ```
 
+### 数组类型推理示例
+
+对于接受数组输入的模型（例如向量嵌入、图像特征等）：
+
+```sql
+-- 创建数组输入的模型
+CREATE MODEL triton_vector_model
+INPUT (input_vector ARRAY<FLOAT>)
+OUTPUT (output_vector ARRAY<FLOAT>)
+WITH (
+    'provider' = 'triton',
+    'endpoint' = 'http://localhost:8000/v2/models',
+    'model-name' = 'vector-transform',
+    'model-version' = '1',
+    'flatten-batch-dim' = 'true'  -- 如果模型不期望批次维度
+);
+
+-- 使用模型进行推理
+CREATE TEMPORARY TABLE vector_input (
+    id BIGINT,
+    features ARRAY<FLOAT>
+) WITH (
+    'connector' = 'datagen',
+    'fields.features.length' = '128'  -- 128维向量
+);
+
+SELECT id, output_vector
+FROM ML_PREDICT(
+  TABLE vector_input,
+  MODEL triton_vector_model,
+  DESCRIPTOR(features)
+);
+```
+
 ### 有状态模型示例
 
 对于需要序列处理的有状态模型：
@@ -224,6 +258,15 @@ WITH (
         </tr>
         <tr>
             <td>
+                <h5>flatten-batch-dim</h5>
+            </td>
+            <td>可选</td>
+            <td style="word-wrap: break-word;">false</td>
+            <td>Boolean</td>
+            <td>是否扁平化数组输入的批次维度。当设置为 true 时，形状 [1,N] 会被转换为 [N]。默认为 false。适用于某些 Triton 模型不期望批次维度的情况。</td>
+        </tr>
+        <tr>
+            <td>
                 <h5>priority</h5>
             </td>
             <td>可选</td>
@@ -309,12 +352,29 @@ WITH (
     </thead>
     <tbody>
         <tr>
+            <td>BOOLEAN, TINYINT, SMALLINT, INT, BIGINT</td>
+            <td>BOOLEAN, TINYINT, SMALLINT, INT, BIGINT</td>
+            <td>整数类型推理</td>
+        </tr>
+        <tr>
+            <td>FLOAT, DOUBLE</td>
+            <td>FLOAT, DOUBLE</td>
+            <td>浮点数类型推理</td>
+        </tr>
+        <tr>
             <td>STRING</td>
             <td>STRING</td>
-            <td>通用文本到文本推理（分类、生成等）</td>
+            <td>文本到文本推理（分类、生成等）</td>
+        </tr>
+        <tr>
+            <td>ARRAY&lt;数值类型&gt;</td>
+            <td>ARRAY&lt;数值类型&gt;</td>
+            <td>数组推理（向量、张量等）。支持数值类型数组。</td>
         </tr>
     </tbody>
 </table>
+
+**注意**：输入和输出类型必须与 Triton 模型配置中定义的类型匹配。
 
 ## Triton 服务器设置
 

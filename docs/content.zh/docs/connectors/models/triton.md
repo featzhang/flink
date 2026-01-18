@@ -109,6 +109,40 @@ WITH (
 );
 ```
 
+### Array Type Inference Example
+
+For models that accept array inputs (e.g., vector embeddings, image features):
+
+```sql
+-- Create model with array input
+CREATE MODEL triton_vector_model
+INPUT (input_vector ARRAY<FLOAT>)
+OUTPUT (output_vector ARRAY<FLOAT>)
+WITH (
+    'provider' = 'triton',
+    'endpoint' = 'http://localhost:8000/v2/models',
+    'model-name' = 'vector-transform',
+    'model-version' = '1',
+    'flatten-batch-dim' = 'true'  -- If model doesn't expect batch dimension
+);
+
+-- Use the model for inference
+CREATE TEMPORARY TABLE vector_input (
+    id BIGINT,
+    features ARRAY<FLOAT>
+) WITH (
+    'connector' = 'datagen',
+    'fields.features.length' = '128'  -- 128-dimensional vector
+);
+
+SELECT id, output_vector
+FROM ML_PREDICT(
+  TABLE vector_input,
+  MODEL triton_vector_model,
+  DESCRIPTOR(features)
+);
+```
+
 ### Stateful Model Example
 
 For stateful models that require sequence processing:
@@ -224,6 +258,15 @@ WITH (
         </tr>
         <tr>
             <td>
+                <h5>flatten-batch-dim</h5>
+            </td>
+            <td>optional</td>
+            <td style="word-wrap: break-word;">false</td>
+            <td>Boolean</td>
+            <td>Whether to flatten the batch dimension for array inputs. When true, shape [1,N] becomes [N]. Defaults to false. Useful for Triton models that do not expect a batch dimension.</td>
+        </tr>
+        <tr>
+            <td>
                 <h5>priority</h5>
             </td>
             <td>optional</td>
@@ -309,12 +352,29 @@ WITH (
     </thead>
     <tbody>
         <tr>
+            <td>BOOLEAN, TINYINT, SMALLINT, INT, BIGINT</td>
+            <td>BOOLEAN, TINYINT, SMALLINT, INT, BIGINT</td>
+            <td>Integer type inference</td>
+        </tr>
+        <tr>
+            <td>FLOAT, DOUBLE</td>
+            <td>FLOAT, DOUBLE</td>
+            <td>Floating-point type inference</td>
+        </tr>
+        <tr>
             <td>STRING</td>
             <td>STRING</td>
-            <td>Generic text-to-text inference (classification, generation, etc.)</td>
+            <td>Text-to-text inference (classification, generation, etc.)</td>
+        </tr>
+        <tr>
+            <td>ARRAY&lt;numeric types&gt;</td>
+            <td>ARRAY&lt;numeric types&gt;</td>
+            <td>Array inference (vectors, tensors, etc.). Supports arrays of numeric types.</td>
         </tr>
     </tbody>
 </table>
+
+**Note**: Input and output types must match the types defined in your Triton model configuration.
 
 ## Triton Server Setup
 

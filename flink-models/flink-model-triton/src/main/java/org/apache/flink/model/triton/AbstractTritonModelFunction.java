@@ -28,7 +28,6 @@ import org.apache.flink.table.factories.ModelProviderFactory;
 import org.apache.flink.table.functions.AsyncPredictFunction;
 import org.apache.flink.table.functions.FunctionContext;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.VarCharType;
 
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
@@ -84,6 +83,14 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
                     .intType()
                     .defaultValue(1)
                     .withDescription("Batch size for inference requests. Defaults to 1.");
+
+    public static final ConfigOption<Boolean> FLATTEN_BATCH_DIM =
+            ConfigOptions.key("flatten-batch-dim")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether to flatten the batch dimension for array inputs. "
+                                    + "When true, shape [1,N] becomes [N]. Defaults to false.");
 
     public static final ConfigOption<Integer> PRIORITY =
             ConfigOptions.key("priority")
@@ -145,6 +152,7 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
     private final long timeout;
     private final int maxRetries;
     private final int batchSize;
+    private final boolean flattenBatchDim;
     private final Integer priority;
     private final String sequenceId;
     private final boolean sequenceStart;
@@ -162,6 +170,7 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
         this.timeout = config.get(TIMEOUT);
         this.maxRetries = config.get(MAX_RETRIES);
         this.batchSize = config.get(BATCH_SIZE);
+        this.flattenBatchDim = config.get(FLATTEN_BATCH_DIM);
         this.priority = config.get(PRIORITY);
         this.sequenceId = config.get(SEQUENCE_ID);
         this.sequenceStart = config.get(SEQUENCE_START);
@@ -171,10 +180,8 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
         this.authToken = config.get(AUTH_TOKEN);
         this.customHeaders = config.get(CUSTOM_HEADERS);
 
-        validateSingleColumnSchema(
-                factoryContext.getCatalogModel().getResolvedInputSchema(),
-                new VarCharType(VarCharType.MAX_LENGTH),
-                "input");
+        // Validate input schema - support multiple types
+        validateInputSchema(factoryContext.getCatalogModel().getResolvedInputSchema());
     }
 
     @Override
@@ -194,6 +201,22 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
         }
     }
 
+    /**
+     * Validates the input schema. Subclasses can override for custom validation.
+     *
+     * @param schema The input schema to validate
+     */
+    protected void validateInputSchema(ResolvedSchema schema) {
+        validateSingleColumnSchema(schema, null, "input");
+    }
+
+    /**
+     * Validates that the schema has exactly one physical column, optionally checking the type.
+     *
+     * @param schema The schema to validate
+     * @param expectedType The expected type, or null to skip type checking
+     * @param inputOrOutput Description of whether this is input or output schema
+     */
     protected void validateSingleColumnSchema(
             ResolvedSchema schema, LogicalType expectedType, String inputOrOutput) {
         List<Column> columns = schema.getColumns();
@@ -214,7 +237,7 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
                             inputOrOutput, column.getName(), column.getClass()));
         }
 
-        if (!expectedType.equals(column.getDataType().getLogicalType())) {
+        if (expectedType != null && !expectedType.equals(column.getDataType().getLogicalType())) {
             throw new IllegalArgumentException(
                     String.format(
                             "%s column %s should be %s, but is a %s.",
@@ -222,6 +245,19 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
                             column.getName(),
                             expectedType,
                             column.getDataType().getLogicalType()));
+        }
+
+        // Validate that the type is supported by Triton
+        try {
+            TritonTypeMapper.toTritonDataType(column.getDataType().getLogicalType());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "%s column %s has unsupported type %s for Triton: %s",
+                            inputOrOutput,
+                            column.getName(),
+                            column.getDataType().getLogicalType(),
+                            e.getMessage()));
         }
     }
 
@@ -248,6 +284,10 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
 
     protected int getBatchSize() {
         return batchSize;
+    }
+
+    protected boolean isFlattenBatchDim() {
+        return flattenBatchDim;
     }
 
     protected Integer getPriority() {
