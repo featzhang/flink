@@ -27,6 +27,7 @@ import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.factories.ModelProviderFactory;
 import org.apache.flink.table.functions.AsyncPredictFunction;
 import org.apache.flink.table.functions.FunctionContext;
+import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 
 import okhttp3.OkHttpClient;
@@ -112,10 +113,14 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
                     .withDescription(
                             Description.builder()
                                     .text(
-                                            "Batch size hint for Triton server-side dynamic batching. "
-                                                    + "This does NOT trigger Flink-side batching; each Flink record is sent as a separate HTTP request. "
-                                                    + "Triton's dynamic batching can aggregate multiple concurrent requests into a single inference batch. "
-                                                    + "For explicit Flink-side batching, configure AsyncDataStream's capacity and timeout parameters. "
+                                            "Reserved for future use (v2+). Currently has NO effect in v1. "
+                                                    + "Each Flink record triggers one HTTP request regardless of this setting. "
+                                                    + "Future versions will support Flink-side mini-batch aggregation "
+                                                    + "(buffer N records or T milliseconds before sending). "
+                                                    + "For batching efficiency in v1: "
+                                                    + "1) Configure Triton model's dynamic_batching in config.pbtxt, "
+                                                    + "2) Tune Flink AsyncDataStream capacity for concurrent requests, "
+                                                    + "3) Increase Flink parallelism to create more concurrent requests. "
                                                     + "Defaults to 1.")
                                     .build());
 
@@ -307,20 +312,94 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
                             e.getMessage(),
                             suggestedType.isEmpty() ? "" : "\nSuggestion: " + suggestedType));
         }
+
+        // Enhanced validation for type compatibility
+        validateTritonTypeCompatibility(
+                column.getDataType().getLogicalType(), column.getName(), inputOrOutput);
+    }
+
+    /**
+     * Validates Triton type compatibility with enhanced checks.
+     *
+     * <p>This method performs additional validation beyond basic type support:
+     *
+     * <ul>
+     *   <li>Checks for nested arrays (multi-dimensional tensors not supported in v1)
+     *   <li>Warns about STRING to BYTES mapping
+     *   <li>Provides structured error messages with troubleshooting hints
+     * </ul>
+     *
+     * @param type The logical type to validate
+     * @param columnName The name of the column
+     * @param inputOrOutput Description of whether this is input or output
+     */
+    private void validateTritonTypeCompatibility(
+            LogicalType type, String columnName, String inputOrOutput) {
+
+        // Check for nested arrays (multi-dimensional tensors)
+        if (type instanceof ArrayType) {
+            ArrayType arrayType = (ArrayType) type;
+            LogicalType elementType = arrayType.getElementType();
+
+            // Reject nested arrays
+            if (elementType instanceof ArrayType) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "%s column '%s' has nested array type: %s\n"
+                                        + "Multi-dimensional tensors (ARRAY<ARRAY<T>>) are not supported in v1.\n"
+                                        + "=== Supported Types ===\n"
+                                        + "  • Scalars: INT, BIGINT, FLOAT, DOUBLE, BOOLEAN, STRING\n"
+                                        + "  • 1-D Arrays: ARRAY<INT>, ARRAY<FLOAT>, ARRAY<DOUBLE>, etc.\n"
+                                        + "=== Workarounds ===\n"
+                                        + "  • Flatten to 1-D array: ARRAY<FLOAT> with size = rows * cols\n"
+                                        + "  • Use JSON STRING encoding for complex structures\n"
+                                        + "  • Wait for v2+ which will support ROW<...> types",
+                                inputOrOutput, columnName, type));
+            }
+
+            // Additional check: ensure element type is supported
+            if (elementType instanceof ArrayType) {
+                // This should have been caught above, but double-check
+                throw new IllegalArgumentException(
+                        String.format(
+                                "%s column '%s' has unsupported element type: %s",
+                                inputOrOutput, columnName, elementType));
+            }
+        }
+
+        // Log info about STRING to BYTES mapping
+        if (type instanceof org.apache.flink.table.types.logical.VarCharType) {
+            LOG.info(
+                    "{} column '{}' uses STRING type, which will be mapped to Triton BYTES dtype. "
+                            + "Ensure your Triton model expects string/text inputs.",
+                    inputOrOutput,
+                    columnName);
+        }
     }
 
     /** Provides user-friendly type suggestions for unsupported types. */
     private String getSuggestedTypeForTriton(LogicalType unsupportedType) {
         String typeName = unsupportedType.getTypeRoot().name();
+
+        if (typeName.contains("ARRAY") && unsupportedType instanceof ArrayType) {
+            ArrayType arrayType = (ArrayType) unsupportedType;
+            if (arrayType.getElementType() instanceof ArrayType) {
+                return "Flatten nested array to 1-D: ARRAY<FLOAT> instead of ARRAY<ARRAY<FLOAT>>";
+            }
+        }
+
         if (typeName.contains("MAP")) {
             return "Use ARRAY<T> instead of MAP, or serialize to JSON STRING";
         } else if (typeName.contains("ROW") || typeName.contains("STRUCT")) {
-            return "Flatten ROW into multiple columns or serialize to JSON STRING";
+            return "Flatten ROW into single column, use ARRAY<T> packing, or serialize to JSON STRING";
         } else if (typeName.contains("TIME") || typeName.contains("DATE")) {
-            return "Convert timestamp/date to BIGINT (epoch) or STRING (ISO-8601)";
+            return "Convert timestamp/date to BIGINT (epoch milliseconds) or STRING (ISO-8601)";
         } else if (typeName.contains("DECIMAL")) {
-            return "Use DOUBLE or STRING for decimal values";
+            return "Use DOUBLE for numeric precision or STRING for exact decimal representation";
+        } else if (typeName.contains("BINARY") || typeName.contains("VARBINARY")) {
+            return "Consider using STRING (VARCHAR) type, which maps to Triton BYTES";
         }
+
         return "";
     }
 

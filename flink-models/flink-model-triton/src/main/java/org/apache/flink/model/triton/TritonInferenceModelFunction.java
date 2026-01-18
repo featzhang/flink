@@ -18,6 +18,10 @@
 package org.apache.flink.model.triton;
 
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.model.triton.exception.TritonClientException;
+import org.apache.flink.model.triton.exception.TritonNetworkException;
+import org.apache.flink.model.triton.exception.TritonSchemaException;
+import org.apache.flink.model.triton.exception.TritonServerException;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -48,7 +52,31 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-/** {@link AsyncPredictFunction} for Triton Inference Server generic inference task. */
+/**
+ * {@link AsyncPredictFunction} for Triton Inference Server generic inference task.
+ *
+ * <p><b>Request Model (v1):</b> This implementation processes records one-by-one. Each {@link
+ * #asyncPredict(RowData)} call triggers one HTTP request to Triton server. There is no Flink-side
+ * mini-batch aggregation in the current version.
+ *
+ * <p><b>Batch Efficiency:</b> Inference throughput benefits from:
+ *
+ * <ul>
+ *   <li><b>Triton Dynamic Batching</b>: Configure {@code dynamic_batching} in model's {@code
+ *       config.pbtxt} to aggregate concurrent requests server-side
+ *   <li><b>Flink Parallelism</b>: High parallelism naturally creates concurrent requests that
+ *       Triton can batch together
+ *   <li><b>AsyncDataStream Capacity</b>: Buffer size controls concurrent in-flight requests,
+ *       increasing opportunities for server-side batching
+ * </ul>
+ *
+ * <p><b>Future Roadmap (v2+):</b> Flink-side mini-batch aggregation will be added to reduce HTTP
+ * overhead (configurable via {@code batch-size} and {@code batch-timeout} options).
+ *
+ * @see <a
+ *     href="https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#dynamic-batcher">Triton
+ *     Dynamic Batching Documentation</a>
+ */
 public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
     private static final long serialVersionUID = 1L;
     private static final Logger LOG = LoggerFactory.getLogger(TritonInferenceModelFunction.class);
@@ -131,8 +159,20 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
                             new Callback() {
                                 @Override
                                 public void onFailure(Call call, IOException e) {
-                                    LOG.error("Triton inference request failed", e);
-                                    future.completeExceptionally(e);
+                                    LOG.error(
+                                            "Triton inference request failed due to network error",
+                                            e);
+
+                                    // Wrap IOException in TritonNetworkException
+                                    TritonNetworkException networkException =
+                                            new TritonNetworkException(
+                                                    String.format(
+                                                            "Failed to connect to Triton server at %s: %s. "
+                                                                    + "This may indicate network connectivity issues, DNS resolution failure, or server unavailability.",
+                                                            url, e.getMessage()),
+                                                    e);
+
+                                    future.completeExceptionally(networkException);
                                 }
 
                                 @Override
@@ -140,25 +180,7 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
                                         throws IOException {
                                     try {
                                         if (!response.isSuccessful()) {
-                                            String errorBody =
-                                                    response.body() != null
-                                                            ? response.body().string()
-                                                            : "Unknown error";
-
-                                            // Enhanced error message with shape information
-                                            String errorMsg =
-                                                    String.format(
-                                                            "Triton inference failed with status %d: %s%n"
-                                                                    + "Input type: %s, Input name: %s%n"
-                                                                    + "Hint: Check if your Flink input type matches the Triton model's expected input shape. "
-                                                                    + "For scalar inputs, use INT/FLOAT/STRING etc.; for array inputs, use ARRAY<type>.",
-                                                            response.code(),
-                                                            errorBody,
-                                                            inputType,
-                                                            inputName);
-
-                                            future.completeExceptionally(
-                                                    new RuntimeException(errorMsg));
+                                            handleErrorResponse(response, future);
                                             return;
                                         }
 
@@ -167,6 +189,14 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
                                         Collection<RowData> result =
                                                 parseInferenceResponse(responseBody);
                                         future.complete(result);
+                                    } catch (JsonProcessingException e) {
+                                        LOG.error("Failed to parse Triton inference response", e);
+                                        future.completeExceptionally(
+                                                new TritonClientException(
+                                                        "Failed to parse Triton response JSON: "
+                                                                + e.getMessage()
+                                                                + ". This may indicate an incompatible response format.",
+                                                        400));
                                     } catch (Exception e) {
                                         LOG.error("Failed to process Triton inference response", e);
                                         future.completeExceptionally(e);
@@ -182,6 +212,108 @@ public class TritonInferenceModelFunction extends AbstractTritonModelFunction {
         }
 
         return future;
+    }
+
+    /**
+     * Handles HTTP error responses and creates appropriate typed exceptions.
+     *
+     * @param response The HTTP response with error status
+     * @param future The future to complete exceptionally
+     * @throws IOException If reading response body fails
+     */
+    private void handleErrorResponse(
+            Response response, CompletableFuture<Collection<RowData>> future) throws IOException {
+
+        String errorBody =
+                response.body() != null ? response.body().string() : "No error details provided";
+        int statusCode = response.code();
+
+        // Build detailed error message with context
+        StringBuilder errorMsg = new StringBuilder();
+        errorMsg.append(
+                String.format("Triton inference failed with HTTP %d: %s\n", statusCode, errorBody));
+        errorMsg.append("\n=== Request Configuration ===\n");
+        errorMsg.append(
+                String.format("  Model: %s (version: %s)\n", getModelName(), getModelVersion()));
+        errorMsg.append(String.format("  Endpoint: %s\n", getEndpoint()));
+        errorMsg.append(String.format("  Input column: %s\n", inputName));
+        errorMsg.append(String.format("  Input Flink type: %s\n", inputType));
+        errorMsg.append(
+                String.format(
+                        "  Input Triton dtype: %s\n",
+                        TritonTypeMapper.toTritonDataType(inputType).getTritonName()));
+
+        // Check if this is a shape mismatch error
+        boolean isShapeMismatch =
+                errorBody.toLowerCase().contains("shape")
+                        || errorBody.toLowerCase().contains("dimension");
+
+        if (statusCode >= 400 && statusCode < 500) {
+            // Client error - user configuration issue
+            errorMsg.append("\n=== Troubleshooting (Client Error) ===\n");
+
+            if (statusCode == 400) {
+                errorMsg.append("  • Verify input shape matches model's config.pbtxt\n");
+                errorMsg.append("  • For scalar: use INT/FLOAT/DOUBLE/STRING\n");
+                errorMsg.append("  • For 1-D tensor: use ARRAY<type>\n");
+                errorMsg.append(
+                        "  • Try flatten-batch-dim=true if model expects [N] but gets [1,N]\n");
+
+                if (isShapeMismatch) {
+                    // Create schema exception for shape mismatches
+                    future.completeExceptionally(
+                            new TritonSchemaException(
+                                    errorMsg.toString(),
+                                    "See Triton model config.pbtxt",
+                                    String.format("Flink type: %s", inputType)));
+                    return;
+                }
+            } else if (statusCode == 404) {
+                errorMsg.append("  • Verify model-name: ").append(getModelName()).append("\n");
+                errorMsg.append("  • Verify model-version: ")
+                        .append(getModelVersion())
+                        .append("\n");
+                errorMsg.append("  • Check model is loaded: GET ")
+                        .append(getEndpoint())
+                        .append("\n");
+            } else if (statusCode == 401 || statusCode == 403) {
+                errorMsg.append("  • Check auth-token configuration\n");
+                errorMsg.append("  • Verify server authentication requirements\n");
+            }
+
+            future.completeExceptionally(
+                    new TritonClientException(errorMsg.toString(), statusCode));
+
+        } else if (statusCode >= 500 && statusCode < 600) {
+            // Server error - Triton service issue
+            errorMsg.append("\n=== Troubleshooting (Server Error) ===\n");
+
+            if (statusCode == 500) {
+                errorMsg.append("  • Check Triton server logs for inference crash details\n");
+                errorMsg.append("  • Model may have run out of memory\n");
+                errorMsg.append("  • Input data may trigger model bug\n");
+            } else if (statusCode == 503) {
+                errorMsg.append("  • Server is overloaded or unavailable\n");
+                errorMsg.append("  • This error is retryable with backoff\n");
+                errorMsg.append("  • Consider scaling Triton server resources\n");
+            } else if (statusCode == 504) {
+                errorMsg.append("  • Inference exceeded gateway timeout\n");
+                errorMsg.append("  • This error is retryable\n");
+                errorMsg.append("  • Consider increasing timeout configuration\n");
+            }
+
+            future.completeExceptionally(
+                    new TritonServerException(errorMsg.toString(), statusCode));
+
+        } else {
+            // Unexpected status code
+            errorMsg.append("\n=== Unexpected Status Code ===\n");
+            errorMsg.append("  • This status code is not standard for Triton\n");
+            errorMsg.append("  • Check if proxy/load balancer is involved\n");
+
+            future.completeExceptionally(
+                    new TritonClientException(errorMsg.toString(), statusCode));
+        }
     }
 
     private String buildInferenceRequest(RowData rowData) throws JsonProcessingException {

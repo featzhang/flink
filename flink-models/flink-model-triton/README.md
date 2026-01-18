@@ -18,10 +18,22 @@
 
 ### Why Batch-First?
 
-This initial version focuses on correctness and API compatibility with Triton's inference protocol. The batch-oriented design allows us to:
+**Important**: The term "batch-first" refers to this module's **primary use case** (batch table processing via `ML_PREDICT`), NOT to request-level batching semantics.
+
+**Current Request Model (v1):**
+- Each Flink record triggers **ONE HTTP inference request** (1:1 mapping)
+- No Flink-side mini-batch aggregation in this version
+- Batching efficiency comes from:
+  - **Triton server-side dynamic batching**: Configure in model's `config.pbtxt` to aggregate concurrent requests
+  - **Flink table-level parallelism**: Natural concurrency from parallel source reads
+  - **AsyncDataStream capacity**: Buffer size controls concurrent in-flight requests
+
+This initial version focuses on correctness and API compatibility with Triton's inference protocol. The batch-oriented **use case** allows us to:
 - Validate type mappings and schema handling with simpler control flow
 - Establish stable configuration patterns before adding streaming complexity
 - Gather community feedback on API design before committing to streaming semantics
+
+**Future Enhancement (v2+):** Flink-side mini-batch buffer (N rows / T milliseconds) to reduce HTTP overhead for high-throughput scenarios.
 
 **For streaming use cases**, consider evaluating this module after v2 when async streaming patterns are stabilized.
 
@@ -54,7 +66,7 @@ This module provides integration between Apache Flink and NVIDIA Triton Inferenc
 |--------|------|---------|-------------|
 | `timeout` | Long | 30000 | HTTP request timeout in milliseconds (connect + read + write). |
 | `max-retries` | Integer | 3 | Maximum retry attempts for connection failures (IOException). HTTP 4xx/5xx errors are NOT retried automatically. |
-| `batch-size` | Integer | 1 | **Reserved for future use.** Currently has no effect - each Flink record triggers one HTTP request. Will be used for Flink-side batching in v2+. |
+| `batch-size` | Integer | 1 | **Reserved for future use (v2+).** Currently has NO effect in v1 - each Flink record triggers one HTTP request. Future versions will support Flink-side mini-batch aggregation (buffer N records or T milliseconds). For batching efficiency in v1, configure Triton's `dynamic_batching` in model config and tune AsyncDataStream capacity. |
 | `priority` | Integer | - | Request priority level (0-255, higher values = higher priority). *Triton-specific: See Triton docs for server support.* |
 | `sequence-id` | String | - | Sequence ID for stateful models. *Triton-specific: For models with sequence/state handling.* |
 | `sequence-start` | Boolean | false | Whether this is the start of a sequence for stateful models. *Triton-specific.* |

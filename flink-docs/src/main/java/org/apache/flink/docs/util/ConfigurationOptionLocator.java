@@ -90,7 +90,7 @@ public class ConfigurationOptionLocator {
                         "flink-external-resources/flink-external-resource-gpu",
                         "org.apache.flink.externalresource.gpu"),
                 new OptionsClassLocation(
-                        "flink-models/flink-model-openai", "org.apache.flink.model.openai")
+                        "flink-models/flink-model-openai", "org.apache.flink.model.openai"),
                 new OptionsClassLocation(
                         "flink-models/flink-model-triton", "org.apache.flink.model.triton")
             };
