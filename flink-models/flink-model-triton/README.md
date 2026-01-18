@@ -1,11 +1,38 @@
 # Flink Triton Model Integration
 
-This module provides integration between Apache Flink and NVIDIA Triton Inference Server, enabling real-time model inference within Flink streaming applications.
+## ⚠️ Experimental / MVP Status
+
+**This module is currently experimental and designed for batch-oriented inference workloads.**
+
+### Scope and Positioning
+
+- **Primary Use Case**: Batch inference via `ML_PREDICT` on bounded tables
+- **Stability**: Experimental - APIs may evolve in future releases
+- **Target Scenarios**: Offline processing, batch scoring, model evaluation pipelines
+
+### Non-Goals (for v1)
+
+- **Streaming inference**: Real-time/low-latency async inference in streaming jobs (future scope)
+- **Multi-input/output models**: Complex tensor schemas (ROW, MAP types - planned for v2+)
+- **gRPC protocol**: Binary protocol support (HTTP/REST only in v1)
+
+### Why Batch-First?
+
+This initial version focuses on correctness and API compatibility with Triton's inference protocol. The batch-oriented design allows us to:
+- Validate type mappings and schema handling with simpler control flow
+- Establish stable configuration patterns before adding streaming complexity
+- Gather community feedback on API design before committing to streaming semantics
+
+**For streaming use cases**, consider evaluating this module after v2 when async streaming patterns are stabilized.
+
+---
+
+This module provides integration between Apache Flink and NVIDIA Triton Inference Server, enabling model inference within Flink batch applications.
 
 ## Features
 
 - **REST API Integration**: Communicates with Triton Inference Server via HTTP/REST API
-- **Asynchronous Processing**: Non-blocking inference requests for high throughput
+- **Batch Inference Support**: Designed for `ML_PREDICT` in batch table queries
 - **Flexible Configuration**: Comprehensive configuration options for various use cases
 - **Multi-Type Support**: Supports various input/output data types (STRING, INT, FLOAT, DOUBLE, ARRAY, etc.)
 - **Error Handling**: Built-in retry mechanisms and error handling
@@ -25,37 +52,28 @@ This module provides integration between Apache Flink and NVIDIA Triton Inferenc
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `timeout` | Long | 30000 | HTTP request timeout in milliseconds (connect + read + write). Separate from Flink's async timeout. |
+| `timeout` | Long | 30000 | HTTP request timeout in milliseconds (connect + read + write). |
 | `max-retries` | Integer | 3 | Maximum retry attempts for connection failures (IOException). HTTP 4xx/5xx errors are NOT retried automatically. |
-| `batch-size` | Integer | 1 | **Server-side batching hint** for Triton's dynamic batching. Does NOT trigger Flink-side batching. Each record is sent as a separate HTTP request. |
-| `priority` | Integer | - | Request priority level (0-255, higher values = higher priority) |
-| `sequence-id` | String | - | Sequence ID for stateful models |
-| `sequence-start` | Boolean | false | Whether this is the start of a sequence for stateful models |
-| `sequence-end` | Boolean | false | Whether this is the end of a sequence for stateful models |
-| `binary-data` | Boolean | false | Whether to use binary data transfer (currently experimental, defaults to JSON) |
+| `batch-size` | Integer | 1 | **Reserved for future use.** Currently has no effect - each Flink record triggers one HTTP request. Will be used for Flink-side batching in v2+. |
+| `priority` | Integer | - | Request priority level (0-255, higher values = higher priority). *Triton-specific: See Triton docs for server support.* |
+| `sequence-id` | String | - | Sequence ID for stateful models. *Triton-specific: For models with sequence/state handling.* |
+| `sequence-start` | Boolean | false | Whether this is the start of a sequence for stateful models. *Triton-specific.* |
+| `sequence-end` | Boolean | false | Whether this is the end of a sequence for stateful models. *Triton-specific.* |
+| `binary-data` | Boolean | false | Whether to use binary data transfer. **Not implemented in v1** (reserved for future use, currently JSON-only). |
 | `compression` | String | - | Compression algorithm to use (e.g., 'gzip') |
 | `auth-token` | String | - | Authentication token for secured Triton servers |
 | `custom-headers` | String | - | Custom HTTP headers in JSON format |
+| `flatten-batch-dim` | Boolean | false | *Advanced/Triton-specific*: Remove leading batch dimension from input shape. Use when Triton model expects `[N]` but Flink provides `[1,N]`. |
 
 ### Important Notes on Batching
 
-The `batch-size` parameter is a **hint to Triton's server-side dynamic batching**, not a Flink-side batching mechanism:
+**Current v1 Behavior**: Each Flink record triggers **one HTTP request** (1:1 mapping). There is no Flink-side batching in the initial version.
 
-- **Flink behavior**: Each input record triggers one HTTP request (1:1 mapping)
-- **Triton behavior**: The server can aggregate multiple concurrent requests into a batch
-- **For Flink-side batching**: Configure AsyncDataStream's `capacity` and `timeout` parameters when using async I/O operators
+- The `batch-size` option is reserved for future use (Flink-side request aggregation)
+- For server-side batching: Configure Triton's model `config.pbtxt` with `dynamic_batching` settings
+- Batch inference workloads naturally benefit from table-level parallelism without explicit batching
 
-**Example:**
-```java
-// Flink async I/O configuration (affects Flink-side buffering)
-AsyncDataStream.unorderedWait(
-    dataStream,
-    new AsyncModelFunction(),
-    5000,      // timeout
-    TimeUnit.MILLISECONDS,
-    100        // capacity (max concurrent requests)
-);
-```
+**Future enhancement** (v2+): Flink-side batching to reduce HTTP overhead for high-throughput scenarios.
 
 ## Usage Example
 
@@ -320,6 +338,23 @@ All dependencies are shaded to avoid conflicts with your application.
 2. **REST API Only**: Uses HTTP/REST protocol. gRPC is not yet supported
 3. **No Flink-Side Batching**: Each record triggers a separate HTTP request (relies on Triton's server-side batching)
 4. **Binary Data Mode**: Declared but not fully implemented (JSON only)
+
+### Testing and Validation
+
+**Unit Test Coverage**: This module includes comprehensive unit tests for:
+- Type mapping logic (`TritonTypeMapper`)
+- HTTP request/response formatting
+- Configuration validation
+- Provider factory registration
+
+**Integration Testing**: End-to-end tests with a live Triton server are **not included** in this PR due to:
+- CI environment constraints (no GPU/Triton infrastructure in Flink CI)
+- Complexity of Docker-in-Docker setup for model serving
+- Focus on **protocol correctness** rather than end-to-end deployment validation
+
+**Manual Validation**: The module has been manually tested with local Triton instances across various model types (text classification, embeddings, numeric regression). Users are encouraged to validate with their specific Triton deployments.
+
+**Note**: This testing approach is consistent with other `flink-models` providers (e.g., `flink-model-openai` tests protocol compliance without live API calls).
 
 ### Planned Enhancements (v2+)
 
