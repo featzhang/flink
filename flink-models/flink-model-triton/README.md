@@ -17,7 +17,7 @@ This module provides integration between Apache Flink and NVIDIA Triton Inferenc
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `endpoint` | String | Full URL of the Triton Inference Server endpoint (e.g., `http://localhost:8000/v2/models`) |
+| `endpoint` | String | Base URL of the Triton Inference Server (e.g., `http://localhost:8000` or `http://localhost:8000/v2/models`). The integration will auto-complete to the full inference path. |
 | `model-name` | String | Name of the model to invoke on Triton server |
 | `model-version` | String | Version of the model to use (defaults to "latest") |
 
@@ -25,17 +25,37 @@ This module provides integration between Apache Flink and NVIDIA Triton Inferenc
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `timeout` | Long | 30000 | Request timeout in milliseconds |
-| `max-retries` | Integer | 3 | Maximum number of retries for failed requests |
-| `batch-size` | Integer | 1 | Batch size for inference requests |
+| `timeout` | Long | 30000 | HTTP request timeout in milliseconds (connect + read + write). Separate from Flink's async timeout. |
+| `max-retries` | Integer | 3 | Maximum retry attempts for connection failures (IOException). HTTP 4xx/5xx errors are NOT retried automatically. |
+| `batch-size` | Integer | 1 | **Server-side batching hint** for Triton's dynamic batching. Does NOT trigger Flink-side batching. Each record is sent as a separate HTTP request. |
 | `priority` | Integer | - | Request priority level (0-255, higher values = higher priority) |
 | `sequence-id` | String | - | Sequence ID for stateful models |
 | `sequence-start` | Boolean | false | Whether this is the start of a sequence for stateful models |
 | `sequence-end` | Boolean | false | Whether this is the end of a sequence for stateful models |
-| `binary-data` | Boolean | false | Whether to use binary data transfer (defaults to JSON) |
+| `binary-data` | Boolean | false | Whether to use binary data transfer (currently experimental, defaults to JSON) |
 | `compression` | String | - | Compression algorithm to use (e.g., 'gzip') |
 | `auth-token` | String | - | Authentication token for secured Triton servers |
 | `custom-headers` | String | - | Custom HTTP headers in JSON format |
+
+### Important Notes on Batching
+
+The `batch-size` parameter is a **hint to Triton's server-side dynamic batching**, not a Flink-side batching mechanism:
+
+- **Flink behavior**: Each input record triggers one HTTP request (1:1 mapping)
+- **Triton behavior**: The server can aggregate multiple concurrent requests into a batch
+- **For Flink-side batching**: Configure AsyncDataStream's `capacity` and `timeout` parameters when using async I/O operators
+
+**Example:**
+```java
+// Flink async I/O configuration (affects Flink-side buffering)
+AsyncDataStream.unorderedWait(
+    dataStream,
+    new AsyncModelFunction(),
+    5000,      // timeout
+    TimeUnit.MILLISECONDS,
+    100        // capacity (max concurrent requests)
+);
+```
 
 ## Usage Example
 
@@ -111,6 +131,8 @@ Table result = tableEnv.sqlQuery(
 
 ## Supported Data Types
 
+**Current Version (v1) Limitation**: Only single input column and single output column are supported per model.
+
 The Triton integration supports the following Flink data types:
 
 | Flink Type | Triton Type | Description |
@@ -124,6 +146,14 @@ The Triton integration supports the following Flink data types:
 | `DOUBLE` | `FP64` | 64-bit floating point |
 | `STRING` / `VARCHAR` | `BYTES` | String/text data |
 | `ARRAY<T>` | `TYPE[]` | Array of any supported type |
+
+### Multi-Tensor Models (Workarounds for v1)
+
+If your Triton model requires multiple input tensors, consider these approaches:
+
+1. **JSON Encoding**: Serialize multiple fields into a JSON STRING
+2. **Array Packing**: Concatenate values into a single ARRAY<T>
+3. **Future Support**: ROW<...> and MAP<...> types are planned for future releases
 
 ### Type Mapping Examples
 
@@ -203,17 +233,59 @@ model_repository/
 
 The integration includes comprehensive error handling:
 
-- **Connection Errors**: Automatic retry with exponential backoff
-- **Timeout Handling**: Configurable request timeouts
-- **HTTP Errors**: Detailed error messages from Triton server
-- **Serialization Errors**: JSON parsing and validation errors
+- **Connection Errors**: Automatic retry with exponential backoff (OkHttp built-in)
+- **Timeout Handling**: Configurable HTTP request timeout (default 30s)
+- **HTTP Errors**: 4xx/5xx responses are NOT automatically retried
+  - 400 Bad Request: Usually indicates shape/type mismatch
+  - 404 Not Found: Model or version not available
+  - 500 Internal Server Error: Triton inference failure
+- **Serialization Errors**: JSON parsing and type validation errors
+
+### Retry Behavior Matrix
+
+| Error Type | Trigger | Flink Behavior | Triton Behavior |
+|------------|---------|----------------|-----------------|
+| Connection Timeout | Network issue | Fails async operation | N/A |
+| HTTP Timeout | Slow inference | Fails after `timeout` ms | N/A |
+| Connection Failure (IOException) | Network error | Retries up to `max-retries` | N/A |
+| HTTP 4xx | Client error (bad input/shape) | No retry, fails immediately | Returns error JSON |
+| HTTP 5xx | Server error (inference crash) | No retry, fails immediately | Returns error JSON |
+| JSON Parse Error | Invalid response | No retry, fails immediately | N/A |
+
+**Important**: Configure Flink's async timeout separately from HTTP timeout to avoid cascading failures:
+```java
+// Flink async timeout should be > HTTP timeout + retry overhead
+AsyncDataStream.unorderedWait(stream, asyncFunc, 60000, TimeUnit.MILLISECONDS);
+```
 
 ## Performance Considerations
 
-- **Connection Pooling**: HTTP clients are pooled and reused for efficiency
+- **Connection Pooling**: HTTP clients are shared across function instances with the same timeout/retry configuration (reference-counted singleton per JVM)
 - **Asynchronous Processing**: Non-blocking requests prevent thread starvation
-- **Batch Processing**: Configure batch size for optimal throughput
-- **Resource Management**: Automatic cleanup of HTTP resources
+- **Batch Processing**: 
+  - **Triton-side**: Enable dynamic batching in Triton's model config for optimal throughput
+  - **Flink-side**: Configure AsyncDataStream capacity for concurrent request buffering
+- **Resource Management**: Automatic cleanup of HTTP resources via reference counting
+
+### Performance Tuning Tips
+
+1. **Increase Async Capacity**: For high-throughput scenarios
+   ```java
+   AsyncDataStream.unorderedWait(stream, asyncFunc, timeout, TimeUnit.MILLISECONDS, 200); // capacity=200
+   ```
+
+2. **Enable Triton Dynamic Batching**: In model's `config.pbtxt`
+   ```
+   dynamic_batching {
+     preferred_batch_size: [ 4, 8, 16 ]
+     max_queue_delay_microseconds: 100
+   }
+   ```
+
+3. **Tune Parallelism**: Match Flink parallelism to Triton server capacity
+   ```java
+   dataStream.map(...).setParallelism(10); // Adjust based on server resources
+   ```
 
 ## Monitoring and Debugging
 
@@ -234,8 +306,26 @@ This will provide detailed logs about:
 ## Dependencies
 
 This module includes the following key dependencies:
-- OkHttp for HTTP client functionality
+- OkHttp for HTTP client functionality (with connection pooling)
 - Jackson for JSON processing
 - Flink Table API for model integration
 
 All dependencies are shaded to avoid conflicts with your application.
+
+## Limitations and Future Work
+
+### Current Limitations (v1)
+
+1. **Single Input/Output Only**: Each model must have exactly one input column and one output column
+2. **REST API Only**: Uses HTTP/REST protocol. gRPC is not yet supported
+3. **No Flink-Side Batching**: Each record triggers a separate HTTP request (relies on Triton's server-side batching)
+4. **Binary Data Mode**: Declared but not fully implemented (JSON only)
+
+### Planned Enhancements (v2+)
+
+- **Multi-Input/Output Support**: Using ROW<...> or MAP<...> types to map multiple Triton tensors
+- **gRPC Protocol**: Native gRPC support for improved performance and streaming
+- **Flink-Side Batching**: Optional aggregation of multiple records before sending to Triton
+- **Binary Data Transfer**: Efficient binary serialization for large tensor data
+
+**Feedback Welcome**: Please share your use cases and requirements via JIRA or mailing lists to help prioritize these features.

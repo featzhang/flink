@@ -30,7 +30,25 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Utility class for Triton Inference Server HTTP client management. */
+/**
+ * Utility class for Triton Inference Server HTTP client management.
+ *
+ * <p>This class implements a reference-counted singleton pattern for OkHttpClient instances.
+ * Multiple function instances sharing the same timeout and retry configuration will reuse the same
+ * client, reducing resource consumption in high-parallelism scenarios.
+ *
+ * <p><b>Resource Management:</b>
+ *
+ * <ul>
+ *   <li>Clients are cached by (timeout, maxRetries) key
+ *   <li>Reference count tracks active users
+ *   <li>Client is closed when reference count reaches zero
+ *   <li>Thread-safe via synchronized blocks
+ * </ul>
+ *
+ * <p><b>URL Construction:</b> The {@link #buildInferenceUrl} method normalizes endpoint URLs to
+ * conform to Triton's REST API specification: {@code /v2/models/{name}/versions/{version}/infer}
+ */
 public class TritonUtils {
     private static final Logger LOG = LoggerFactory.getLogger(TritonUtils.class);
 
@@ -38,6 +56,17 @@ public class TritonUtils {
 
     private static final Map<ClientKey, ClientValue> cache = new HashMap<>();
 
+    /**
+     * Creates or retrieves a cached HTTP client with the specified configuration.
+     *
+     * <p>This method implements reference-counted client pooling. Clients with identical timeout
+     * and retry settings are shared across multiple callers.
+     *
+     * @param timeoutMs Timeout in milliseconds for connect, read, and write operations
+     * @param maxRetries Maximum retry attempts (note: OkHttp retries are automatic for connection
+     *     failures only, not for HTTP errors)
+     * @return A shared or new OkHttpClient instance
+     */
     public static OkHttpClient createHttpClient(long timeoutMs, int maxRetries) {
         synchronized (LOCK) {
             ClientKey key = new ClientKey(timeoutMs, maxRetries);
@@ -62,6 +91,12 @@ public class TritonUtils {
         }
     }
 
+    /**
+     * Releases a reference to an HTTP client. When the reference count reaches zero, the client is
+     * closed and removed from the cache.
+     *
+     * @param client The client to release
+     */
     public static void releaseHttpClient(OkHttpClient client) {
         synchronized (LOCK) {
             ClientKey keyToRemove = null;
@@ -88,7 +123,22 @@ public class TritonUtils {
         }
     }
 
-    /** Builds the inference URL for a specific model and version. */
+    /**
+     * Builds the inference URL for a specific model and version.
+     *
+     * <p>This method normalizes various endpoint formats to the standard Triton REST API path:
+     *
+     * <pre>
+     * Input: http://localhost:8000          → http://localhost:8000/v2/models/mymodel/versions/1/infer
+     * Input: http://localhost:8000/v2       → http://localhost:8000/v2/models/mymodel/versions/1/infer
+     * Input: http://localhost:8000/v2/models → http://localhost:8000/v2/models/mymodel/versions/1/infer
+     * </pre>
+     *
+     * @param endpoint The base URL or partial URL of the Triton server
+     * @param modelName The name of the model
+     * @param modelVersion The version of the model (e.g., "1", "latest")
+     * @return The complete inference endpoint URL
+     */
     public static String buildInferenceUrl(String endpoint, String modelName, String modelVersion) {
         String baseUrl = endpoint.replaceAll("/*$", "");
         if (!baseUrl.endsWith("/v2/models")) {

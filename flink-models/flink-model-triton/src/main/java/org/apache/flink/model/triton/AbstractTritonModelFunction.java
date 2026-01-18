@@ -38,7 +38,28 @@ import java.util.stream.Collectors;
 
 import static org.apache.flink.configuration.description.TextElement.code;
 
-/** Abstract parent class for {@link AsyncPredictFunction}s for Triton Inference Server API. */
+/**
+ * Abstract parent class for {@link AsyncPredictFunction}s for Triton Inference Server API.
+ *
+ * <p>This implementation uses REST-based HTTP communication with Triton Inference Server. Each
+ * Flink record triggers a separate HTTP request (no Flink-side batching). Triton's server-side
+ * dynamic batching can aggregate concurrent requests.
+ *
+ * <p><b>HTTP Client Lifecycle:</b> A shared HTTP client pool is maintained per JVM with reference
+ * counting. Multiple function instances with identical timeout/retry settings share the same client
+ * instance to avoid resource exhaustion in high-parallelism scenarios.
+ *
+ * <p><b>Current Limitations (v1):</b>
+ *
+ * <ul>
+ *   <li>Only single input column and single output column are supported
+ *   <li>REST API only; gRPC may be introduced in future versions
+ *   <li>Binary data mode is declared but not fully implemented
+ * </ul>
+ *
+ * <p><b>Future Roadmap:</b> Support for multi-input/multi-output models using ROW or MAP types, and
+ * native gRPC protocol for improved performance.
+ */
 public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractTritonModelFunction.class);
 
@@ -69,20 +90,34 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
             ConfigOptions.key("timeout")
                     .longType()
                     .defaultValue(30000L)
-                    .withDescription("Request timeout in milliseconds. Defaults to 30000ms.");
+                    .withDescription(
+                            "HTTP request timeout in milliseconds (connect + read + write). "
+                                    + "This applies per individual request and is separate from Flink's async timeout. "
+                                    + "Defaults to 30000ms (30 seconds).");
 
     public static final ConfigOption<Integer> MAX_RETRIES =
             ConfigOptions.key("max-retries")
                     .intType()
                     .defaultValue(3)
                     .withDescription(
-                            "Maximum number of retries for failed requests. Defaults to 3.");
+                            "Maximum number of retry attempts for failed HTTP requests. "
+                                    + "Retries are triggered on connection failures (IOException). "
+                                    + "HTTP errors (4xx/5xx) are NOT automatically retried. "
+                                    + "Defaults to 3 retries.");
 
     public static final ConfigOption<Integer> BATCH_SIZE =
             ConfigOptions.key("batch-size")
                     .intType()
                     .defaultValue(1)
-                    .withDescription("Batch size for inference requests. Defaults to 1.");
+                    .withDescription(
+                            Description.builder()
+                                    .text(
+                                            "Batch size hint for Triton server-side dynamic batching. "
+                                                    + "This does NOT trigger Flink-side batching; each Flink record is sent as a separate HTTP request. "
+                                                    + "Triton's dynamic batching can aggregate multiple concurrent requests into a single inference batch. "
+                                                    + "For explicit Flink-side batching, configure AsyncDataStream's capacity and timeout parameters. "
+                                                    + "Defaults to 1.")
+                                    .build());
 
     public static final ConfigOption<Boolean> FLATTEN_BATCH_DIM =
             ConfigOptions.key("flatten-batch-dim")
@@ -213,6 +248,15 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
     /**
      * Validates that the schema has exactly one physical column, optionally checking the type.
      *
+     * <p><b>Version 1 Limitation:</b> Only single input/single output models are supported. For
+     * models requiring multiple tensors, consider these workarounds:
+     *
+     * <ul>
+     *   <li>Flatten inputs into a JSON STRING and parse server-side
+     *   <li>Use ARRAY&lt;T&gt; to pack multiple values
+     *   <li>Wait for future ROW&lt;...&gt; support (planned for v2)
+     * </ul>
+     *
      * @param schema The schema to validate
      * @param expectedType The expected type, or null to skip type checking
      * @param inputOrOutput Description of whether this is input or output schema
@@ -223,7 +267,9 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
         if (columns.size() != 1) {
             throw new IllegalArgumentException(
                     String.format(
-                            "Model should have exactly one %s column, but actually has %s columns: %s",
+                            "Model should have exactly one %s column, but actually has %s columns: %s. "
+                                    + "Current version only supports single input/output. "
+                                    + "For multi-tensor models, consider using JSON STRING encoding or ARRAY<T> packing.",
                             inputOrOutput,
                             columns.size(),
                             columns.stream().map(Column::getName).collect(Collectors.toList())));
@@ -251,14 +297,31 @@ public abstract class AbstractTritonModelFunction extends AsyncPredictFunction {
         try {
             TritonTypeMapper.toTritonDataType(column.getDataType().getLogicalType());
         } catch (IllegalArgumentException e) {
+            String suggestedType = getSuggestedTypeForTriton(column.getDataType().getLogicalType());
             throw new IllegalArgumentException(
                     String.format(
-                            "%s column %s has unsupported type %s for Triton: %s",
+                            "%s column %s has unsupported type %s for Triton. %s%s",
                             inputOrOutput,
                             column.getName(),
                             column.getDataType().getLogicalType(),
-                            e.getMessage()));
+                            e.getMessage(),
+                            suggestedType.isEmpty() ? "" : "\nSuggestion: " + suggestedType));
         }
+    }
+
+    /** Provides user-friendly type suggestions for unsupported types. */
+    private String getSuggestedTypeForTriton(LogicalType unsupportedType) {
+        String typeName = unsupportedType.getTypeRoot().name();
+        if (typeName.contains("MAP")) {
+            return "Use ARRAY<T> instead of MAP, or serialize to JSON STRING";
+        } else if (typeName.contains("ROW") || typeName.contains("STRUCT")) {
+            return "Flatten ROW into multiple columns or serialize to JSON STRING";
+        } else if (typeName.contains("TIME") || typeName.contains("DATE")) {
+            return "Convert timestamp/date to BIGINT (epoch) or STRING (ISO-8601)";
+        } else if (typeName.contains("DECIMAL")) {
+            return "Use DOUBLE or STRING for decimal values";
+        }
+        return "";
     }
 
     // Getters for configuration values
