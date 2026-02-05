@@ -18,18 +18,24 @@
 
 import { NgIf } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { of, Subject } from 'rxjs';
 import { catchError, map, mergeMap, takeUntil } from 'rxjs/operators';
 
 import {
   HumanizeWatermarkPipe,
-  HumanizeWatermarkToDatetimePipe
+  HumanizeWatermarkToDatetimePipe,
+  WatermarkDisplayFormat,
+  WatermarkFormatOptions,
+  WatermarkTimezone
 } from '@flink-runtime-web/components/humanize-watermark.pipe';
 import { MetricsService } from '@flink-runtime-web/services';
 import { typeDefinition } from '@flink-runtime-web/utils';
 import { NzIconModule } from 'ng-zorro-antd/icon';
+import { NzRadioModule } from 'ng-zorro-antd/radio';
+import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzTableModule } from 'ng-zorro-antd/table';
-import { NzTooltipModule } from 'ng-zorro-antd/tooltip';
+import { NzToolTipModule } from 'ng-zorro-antd/tooltip';
 
 import { JobLocalService } from '../../job-local.service';
 
@@ -38,12 +44,30 @@ interface WatermarkData {
   watermark: number;
 }
 
+const WATERMARK_FORMAT_STORAGE_KEY = 'flink.watermark.format.preferences';
+
+interface WatermarkFormatPreferences {
+  format: WatermarkDisplayFormat;
+  timezone: WatermarkTimezone;
+  showMilliseconds: boolean;
+}
+
 @Component({
   selector: 'flink-job-overview-drawer-watermarks',
   templateUrl: './job-overview-drawer-watermarks.component.html',
   styleUrls: ['./job-overview-drawer-watermarks.component.less'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [NzTableModule, NgIf, HumanizeWatermarkPipe, HumanizeWatermarkToDatetimePipe, NzIconModule, NzTooltipModule]
+  imports: [
+    NzTableModule,
+    NgIf,
+    HumanizeWatermarkPipe,
+    HumanizeWatermarkToDatetimePipe,
+    NzIconModule,
+    NzToolTipModule,
+    NzSelectModule,
+    NzRadioModule,
+    FormsModule
+  ]
 })
 export class JobOverviewDrawerWatermarksComponent implements OnInit, OnDestroy {
   public readonly trackBySubtaskIndex = (_: number, node: { subTaskIndex: number; watermark: number }): number =>
@@ -54,13 +78,31 @@ export class JobOverviewDrawerWatermarksComponent implements OnInit, OnDestroy {
   public virtualItemSize = 36;
   public readonly narrowLogData = typeDefinition<WatermarkData>();
 
+  // Format options
+  public displayFormat: WatermarkDisplayFormat = 'locale';
+  public timezone: WatermarkTimezone = 'local';
+  public showMilliseconds = true;
+
+  public readonly formatOptions = [
+    { label: 'Locale Format', value: 'locale' as WatermarkDisplayFormat },
+    { label: 'ISO 8601', value: 'iso8601' as WatermarkDisplayFormat },
+    { label: 'Raw Timestamp', value: 'raw' as WatermarkDisplayFormat }
+  ];
+
+  public readonly timezoneOptions = [
+    { label: 'Local Time', value: 'local' as WatermarkTimezone },
+    { label: 'UTC', value: 'utc' as WatermarkTimezone }
+  ];
+
   private readonly destroy$ = new Subject<void>();
 
   constructor(
     private readonly jobLocalService: JobLocalService,
     private readonly metricsService: MetricsService,
     private readonly cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    this.loadFormatPreferences();
+  }
 
   public ngOnInit(): void {
     this.jobLocalService
@@ -97,7 +139,57 @@ export class JobOverviewDrawerWatermarksComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  sortWatermark(a: WatermarkData, b: WatermarkData): number {
+  public sortWatermark(a: WatermarkData, b: WatermarkData): number {
     return a.watermark - b.watermark;
+  }
+
+  public get formatOptions_watermark(): WatermarkFormatOptions {
+    return {
+      format: this.displayFormat,
+      timezone: this.timezone,
+      showMilliseconds: this.showMilliseconds
+    };
+  }
+
+  public onFormatChange(): void {
+    this.saveFormatPreferences();
+    this.cdr.markForCheck();
+  }
+
+  public onTimezoneChange(): void {
+    this.saveFormatPreferences();
+    this.cdr.markForCheck();
+  }
+
+  public onMillisecondsToggle(): void {
+    this.saveFormatPreferences();
+    this.cdr.markForCheck();
+  }
+
+  private loadFormatPreferences(): void {
+    try {
+      const stored = localStorage.getItem(WATERMARK_FORMAT_STORAGE_KEY);
+      if (stored) {
+        const preferences: WatermarkFormatPreferences = JSON.parse(stored);
+        this.displayFormat = preferences.format || 'locale';
+        this.timezone = preferences.timezone || 'local';
+        this.showMilliseconds = preferences.showMilliseconds !== false;
+      }
+    } catch (error) {
+      console.warn('Failed to load watermark format preferences:', error);
+    }
+  }
+
+  private saveFormatPreferences(): void {
+    try {
+      const preferences: WatermarkFormatPreferences = {
+        format: this.displayFormat,
+        timezone: this.timezone,
+        showMilliseconds: this.showMilliseconds
+      };
+      localStorage.setItem(WATERMARK_FORMAT_STORAGE_KEY, JSON.stringify(preferences));
+    } catch (error) {
+      console.warn('Failed to save watermark format preferences:', error);
+    }
   }
 }

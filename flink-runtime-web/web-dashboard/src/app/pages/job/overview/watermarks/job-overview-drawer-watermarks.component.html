@@ -16,12 +16,48 @@
   ~ limitations under the License.
   -->
 
+<div class="watermark-controls">
+  <div class="control-group">
+    <label>Format:</label>
+    <nz-select
+      [(ngModel)]="displayFormat"
+      (ngModelChange)="onFormatChange()"
+      nzSize="small"
+      style="width: 150px;"
+    >
+      <nz-option
+        *ngFor="let option of formatOptions"
+        [nzLabel]="option.label"
+        [nzValue]="option.value"
+      ></nz-option>
+    </nz-select>
+  </div>
+
+  <div class="control-group">
+    <label>Timezone:</label>
+    <nz-radio-group
+      [(ngModel)]="timezone"
+      (ngModelChange)="onTimezoneChange()"
+      nzSize="small"
+    >
+      <label nz-radio nzValue="local">Local</label>
+      <label nz-radio nzValue="utc">UTC</label>
+    </nz-radio-group>
+  </div>
+
+  <div class="control-group">
+    <label nz-checkbox [(ngModel)]="showMilliseconds" (ngModelChange)="onMillisecondsToggle()">
+      Show Milliseconds
+    </label>
+  </div>
+</div>
+
 <nz-table
   class="no-border small full-height"
   nzSize="small"
   [nzLoading]="isLoading"
   [nzData]="listOfWaterMark"
-  [nzScroll]="{ y: 'calc( 100% - 36px )' }"
+  [nzScroll]="{ y: 'calc( 100% - 80px )' }"
   [nzFrontPagination]="false"
   [nzShowPagination]="false"
   [nzVirtualItemSize]="virtualItemSize"
@@ -32,14 +68,14 @@
   <thead>
     <tr>
       <th nzWidth="20%">SubTask</th>
-      <th nzWidth="40%" [nzSortFn]="sortWatermark">Watermark</th>
-      <th nzWidth="40%" [nzSortFn]="sortWatermark">
-        Datetime of Watermark Timestamp
+      <th nzWidth="30%" [nzSortFn]="sortWatermark">Watermark</th>
+      <th nzWidth="50%" [nzSortFn]="sortWatermark">
+        Formatted Timestamp
         <i
           class="header-icon"
           nz-icon
           nz-tooltip
-          nzTooltipTitle="This column shows the datetime that is parsed from watermark timestamp with local time zone. Note that the time zone is obtained through your browser. "
+          nzTooltipTitle="This column shows the formatted timestamp parsed from the watermark. You can customize the format and timezone using the controls above."
           nzType="info-circle"
         ></i>
       </th>
@@ -51,7 +87,7 @@
         <tr>
           <td>{{ watermark.subTaskIndex }}</td>
           <td>{{ watermark.watermark | humanizeWatermark }}</td>
-          <td>{{ watermark.watermark | humanizeWatermarkToDatetime }}</td>
+          <td>{{ watermark.watermark | humanizeWatermarkToDatetime: formatOptions_watermark }}</td>
         </tr>
       </ng-container>
     </ng-template>
