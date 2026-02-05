@@ -109,11 +109,6 @@ export class HumanizeWatermarkToDatetimePipe implements PipeTransform {
     const msString = showMilliseconds ? `.${ms}` : '';
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${msString}${offsetSign}${offsetHours}:${offsetMinutes}`;
   }
-      result += `${offsetSign}${offsetHours}:${offsetMinutes}`;
-
-      return result;
-    }
-  }
 
   private formatLocale(date: Date, timezone: WatermarkTimezone, showMilliseconds: boolean): string {
     let formatted: string;
