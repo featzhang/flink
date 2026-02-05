@@ -90,7 +90,7 @@ export class HumanizeWatermarkToDatetimePipe implements PipeTransform {
   private formatISO8601(date: Date, timezone: WatermarkTimezone, showMilliseconds: boolean): string {
     if (timezone === 'utc') {
       const isoString = date.toISOString();
-      return showMilliseconds ? isoString : isoString.substring(0, 19) + 'Z';
+      return showMilliseconds ? isoString : `${isoString.substring(0, 19)}Z`;
     }
     // Local timezone in ISO8601 format
     const year = date.getFullYear();
