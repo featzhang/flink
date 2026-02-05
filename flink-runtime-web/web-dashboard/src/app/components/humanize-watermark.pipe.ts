@@ -36,7 +36,7 @@ export interface WatermarkFormatOptions {
 export class HumanizeWatermarkPipe implements PipeTransform {
   constructor(private readonly configService: ConfigService) {}
 
-  public transform(value: number, options?: WatermarkFormatOptions): number | string {
+  public transform(value: number): number | string {
     if (isNaN(value) || value <= this.configService.LONG_MIN_VALUE) {
       return 'No Watermark (Watermarks are only available if EventTime is used)';
     } else {
