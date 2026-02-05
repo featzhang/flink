@@ -16,14 +16,13 @@
   ~ limitations under the License.
   -->
 
-<div class="watermark-controls">
   <div class="control-group">
     <label>Format:</label>
     <nz-select
       [(ngModel)]="displayFormat"
       (ngModelChange)="onFormatChange()"
       nzSize="small"
-      style="width: 150px;"
+      style="width: 150px"
     >
       <nz-option
         *ngFor="let option of formatOptions"
@@ -35,11 +34,7 @@
 
   <div class="control-group">
     <label>Timezone:</label>
-    <nz-radio-group
-      [(ngModel)]="timezone"
-      (ngModelChange)="onTimezoneChange()"
-      nzSize="small"
-    >
+    <nz-radio-group [(ngModel)]="timezone" (ngModelChange)="onTimezoneChange()" nzSize="small">
       <label nz-radio nzValue="local">Local</label>
       <label nz-radio nzValue="utc">UTC</label>
     </nz-radio-group>
