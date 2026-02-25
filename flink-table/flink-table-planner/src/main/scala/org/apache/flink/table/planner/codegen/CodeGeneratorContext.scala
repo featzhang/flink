@@ -29,7 +29,7 @@ import org.apache.flink.table.planner.utils.{InternalConfigOptions, TableConfigU
 import org.apache.flink.table.runtime.operators.TableStreamOperator
 import org.apache.flink.table.runtime.typeutils.{ExternalSerializer, InternalSerializers}
 import org.apache.flink.table.runtime.util.collections._
-import org.apache.flink.table.types.DataType
+import org.apache.flink.table.types.{DataType, DataTypes}
 import org.apache.flink.table.types.logical._
 import org.apache.flink.table.types.logical.LogicalTypeRoot._
 import org.apache.flink.table.utils.DateTimeUtils
@@ -370,6 +370,22 @@ class CodeGeneratorContext(
    */
   def reuseInputUnboxingCode(): String = {
     reusableInputUnboxingExprs.values.map(_.code).mkString("\n")
+  }
+
+  def reuseBatchInputUnboxingCode(): String = {
+    reusableInputUnboxingExprs.values
+      .map {
+        expression: GeneratedExpression =>
+          expression.resultType.getTypeRoot match {
+            case CHAR | VARCHAR =>
+              val converterTerm = reusableConverters(DataTypes.STRING())
+              val internalTypeTerm = boxedTypeTermForType(expression.resultType)
+              s"(java.lang.String) $converterTerm.toExternal(($internalTypeTerm) ${expression.resultTerm})"
+            case _ =>
+              expression.resultTerm
+          }
+      }
+      .mkString("")
   }
 
   /** Returns code block of unboxing input variables which belongs to the given inputTerm. */

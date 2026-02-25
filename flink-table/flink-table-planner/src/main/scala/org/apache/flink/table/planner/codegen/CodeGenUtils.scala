@@ -20,6 +20,7 @@ package org.apache.flink.table.planner.codegen
 import org.apache.flink.api.common.functions.RuntimeContext
 import org.apache.flink.api.common.serialization.SerializerConfigImpl
 import org.apache.flink.core.memory.MemorySegment
+import org.apache.flink.table.api.config.OptimizerConfigOptions
 import org.apache.flink.table.data._
 import org.apache.flink.table.data.binary._
 import org.apache.flink.table.data.util.DataFormatConverters
@@ -956,14 +957,29 @@ object CodeGenUtils {
       return s"($targetTypeTerm) null"
     }
 
+    val batchEnabled = ctx.tableConfig.getConfiguration
+      .getBoolean(OptimizerConfigOptions.TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_ENABLED, false)
+
     // convert internal structure to target type
     val externalResultTerm = if (isInternal(targetDataType)) {
-      s"($targetTypeTerm) ${internalExpr.resultTerm}"
+      if (batchEnabled) {
+        s"(List<$targetTypeTerm>) list"
+      } else {
+        s"($targetTypeTerm) ${internalExpr.resultTerm}"
+      }
     } else {
-      genToExternalConverter(ctx, targetDataType, internalExpr.resultTerm)
+      val externalConverterStr =
+        genToExternalConverter(ctx, targetDataType, internalExpr.resultTerm)
+      val externalTypeTerm = typeTerm(targetDataType.getConversionClass)
+      if (batchEnabled) {
+        s"(List<$externalTypeTerm>) list"
+      } else {
+        externalConverterStr
+      }
     }
+
     // merge null term into the result term
-    if (targetDataType.getConversionClass.isPrimitive) {
+    if (targetDataType.getConversionClass.isPrimitive || batchEnabled) {
       externalResultTerm
     } else {
       s"${internalExpr.nullTerm} ? null : ($externalResultTerm)"

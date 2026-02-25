@@ -72,6 +72,8 @@ import org.apache.flink.table.runtime.generated.GeneratedResultFuture;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
 import org.apache.flink.table.runtime.operators.TableKeyedAsyncWaitOperatorFactory;
 import org.apache.flink.table.runtime.operators.join.FlinkJoinType;
+import org.apache.flink.table.runtime.operators.join.lookup.AsyncBatchLookupJoinRunner;
+import org.apache.flink.table.runtime.operators.join.lookup.AsyncBatchLookupJoinWithCalcRunner;
 import org.apache.flink.table.runtime.operators.join.lookup.AsyncLookupJoinRunner;
 import org.apache.flink.table.runtime.operators.join.lookup.AsyncLookupJoinWithCalcRunner;
 import org.apache.flink.table.runtime.operators.join.lookup.LookupJoinRunner;
@@ -106,6 +108,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.table.api.config.OptimizerConfigOptions.TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_ENABLED;
+import static org.apache.flink.table.api.config.OptimizerConfigOptions.TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_FLUSH_MILLIS;
+import static org.apache.flink.table.api.config.OptimizerConfigOptions.TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_SIZE;
 import static org.apache.flink.table.planner.calcite.FlinkTypeFactory.toLogicalType;
 import static org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTypeFactory;
 import static org.apache.flink.util.Preconditions.checkArgument;
@@ -452,6 +457,12 @@ public abstract class CommonExecLookupJoin extends ExecNodeBase<RowData> {
             LookupJoinUtil.AsyncOptions asyncLookupOptions,
             @Nullable RowDataKeySelector keySelector) {
 
+        int asyncBatchSize =
+                config.getConfiguration().get(TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_SIZE);
+
+        long flushIntervalMillis =
+                config.getConfiguration().get(TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_FLUSH_MILLIS);
+
         DataTypeFactory dataTypeFactory =
                 ShortcutUtils.unwrapContext(relBuilder).getCatalogManager().getDataTypeFactory();
 
@@ -460,70 +471,159 @@ public abstract class CommonExecLookupJoin extends ExecNodeBase<RowData> {
                         .mapToObj(allLookupKeys::get)
                         .collect(Collectors.toList());
 
-        FunctionCallCodeGenerator.GeneratedTableFunctionWithDataType<AsyncFunction<RowData, Object>>
-                generatedFuncWithType =
-                        LookupJoinCodeGenerator.generateAsyncLookupFunction(
+        AsyncFunction<RowData, RowData> asyncFunc;
+        if (config.getConfiguration().get(TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_ENABLED)) {
+            FunctionCallCodeGenerator.GeneratedTableFunctionWithDataType<
+                            AsyncFunction<List<RowData>, Object>>
+                    generatedFuncWithType =
+                            LookupJoinCodeGenerator.generateBatchAsyncLookupFunction(
+                                    config,
+                                    classLoader,
+                                    dataTypeFactory,
+                                    inputRowType,
+                                    tableSourceRowType,
+                                    resultRowType,
+                                    convertedKeys,
+                                    asyncLookupFunction,
+                                    StringUtils.join(temporalTable.getQualifiedName(), "."));
+            RelDataType projectionOutputRelDataType = getProjectionOutputRelDataType(relBuilder);
+            RowType rightRowType =
+                    getRightOutputRowType(projectionOutputRelDataType, tableSourceRowType);
+            // a projection or filter after table source scan
+            GeneratedResultFuture<TableFunctionResultFuture<List<RowData>>>
+                    generatedResultFuture =
+                            LookupJoinCodeGenerator.generateTableBatchAsyncCollector(
+                                    config,
+                                    classLoader,
+                                    "TableFunctionResultFuture",
+                                    inputRowType,
+                                    rightRowType,
+                                    JavaScalaConversionUtil.toScala(
+                                            Optional.ofNullable(remainingJoinCondition)));
+            GeneratedFilterCondition generatedPreFilterCondition =
+                    FilterCodeGenerator.generateFilterCondition(
+                            config, classLoader, preFilterCondition, inputRowType);
+            DataStructureConverter<?, ?> fetcherConverter =
+                    DataStructureConverters.getConverter(generatedFuncWithType.dataType());
+
+            if (projectionOnTemporalTable != null) {
+                // a projection or filter after table source scan
+                GeneratedFunction<FlatMapFunction<RowData, RowData>> generatedCalc =
+                        LookupJoinCodeGenerator.generateCalcMapFunction(
                                 config,
                                 classLoader,
-                                dataTypeFactory,
-                                inputRowType,
-                                tableSourceRowType,
-                                resultRowType,
-                                convertedKeys,
-                                asyncLookupFunction,
-                                StringUtils.join(temporalTable.getQualifiedName(), "."));
+                                JavaScalaConversionUtil.toScala(projectionOnTemporalTable),
+                                filterOnTemporalTable,
+                                projectionOutputRelDataType,
+                                tableSourceRowType);
+                asyncFunc =
+                        new AsyncBatchLookupJoinWithCalcRunner(
+                                generatedFuncWithType.tableFunc(),
+                                (DataStructureConverter<RowData, Object>) fetcherConverter,
+                                generatedCalc,
+                                generatedResultFuture,
+                                generatedPreFilterCondition,
+                                InternalSerializers.create(rightRowType),
+                                isLeftOuterJoin,
+                                asyncLookupOptions.asyncBufferCapacity,
+                                asyncBatchSize,
+                                flushIntervalMillis);
+            } else {
+                asyncFunc =
+                        new AsyncBatchLookupJoinRunner(
+                                generatedFuncWithType.tableFunc(),
+                                (DataStructureConverter<RowData, Object>) fetcherConverter,
+                                generatedResultFuture,
+                                generatedPreFilterCondition,
+                                InternalSerializers.create(rightRowType),
+                                isLeftOuterJoin,
+                                asyncLookupOptions.asyncBufferCapacity,
+                                asyncBatchSize,
+                                flushIntervalMillis);
+            }
 
-        RelDataType projectionOutputRelDataType = getProjectionOutputRelDataType(relBuilder);
-        RowType rightRowType =
-                getRightOutputRowType(projectionOutputRelDataType, tableSourceRowType);
-        // a projection or filter after table source scan
-        GeneratedResultFuture<TableFunctionResultFuture<RowData>> generatedResultFuture =
-                LookupJoinCodeGenerator.generateTableAsyncCollector(
-                        config,
-                        classLoader,
-                        "TableFunctionResultFuture",
-                        inputRowType,
-                        rightRowType,
-                        JavaScalaConversionUtil.toScala(
-                                Optional.ofNullable(remainingJoinCondition)));
-        GeneratedFilterCondition generatedPreFilterCondition =
-                FilterCodeGenerator.generateFilterCondition(
-                        config, classLoader, preFilterCondition, inputRowType);
+            if (asyncLookupOptions.keyOrdered) {
+                Preconditions.checkState(
+                        AsyncDataStream.OutputMode.ORDERED.equals(
+                                asyncLookupOptions.asyncOutputMode));
+                return new TableKeyedAsyncWaitOperatorFactory<>(
+                        asyncFunc,
+                        keySelector,
+                        asyncLookupOptions.asyncTimeout,
+                        asyncLookupOptions.asyncBufferCapacity);
+            }
+            return new AsyncWaitOperatorFactory<>(
+                    asyncFunc,
+                    asyncLookupOptions.asyncTimeout,
+                    asyncLookupOptions.asyncBufferCapacity,
+                    asyncLookupOptions.asyncOutputMode);
+        } else {
+            FunctionCallCodeGenerator.GeneratedTableFunctionWithDataType<
+                            AsyncFunction<RowData, Object>>
+                    generatedFuncWithType =
+                            LookupJoinCodeGenerator.generateAsyncLookupFunction(
+                                    config,
+                                    classLoader,
+                                    dataTypeFactory,
+                                    inputRowType,
+                                    tableSourceRowType,
+                                    resultRowType,
+                                    convertedKeys,
+                                    asyncLookupFunction,
+                                    StringUtils.join(temporalTable.getQualifiedName(), "."));
 
-        DataStructureConverter<?, ?> fetcherConverter =
-                DataStructureConverters.getConverter(generatedFuncWithType.dataType());
-        AsyncFunction<RowData, RowData> asyncFunc;
-        if (projectionOnTemporalTable != null) {
+            RelDataType projectionOutputRelDataType = getProjectionOutputRelDataType(relBuilder);
+            RowType rightRowType =
+                    getRightOutputRowType(projectionOutputRelDataType, tableSourceRowType);
             // a projection or filter after table source scan
-            GeneratedFunction<FlatMapFunction<RowData, RowData>> generatedCalc =
-                    LookupJoinCodeGenerator.generateCalcMapFunction(
+            GeneratedResultFuture<TableFunctionResultFuture<RowData>> generatedResultFuture =
+                    LookupJoinCodeGenerator.generateTableAsyncCollector(
                             config,
                             classLoader,
-                            JavaScalaConversionUtil.toScala(projectionOnTemporalTable),
-                            filterOnTemporalTable,
-                            projectionOutputRelDataType,
-                            tableSourceRowType);
-            asyncFunc =
-                    new AsyncLookupJoinWithCalcRunner(
-                            generatedFuncWithType.tableFunc(),
-                            (DataStructureConverter<RowData, Object>) fetcherConverter,
-                            generatedCalc,
-                            generatedResultFuture,
-                            generatedPreFilterCondition,
-                            InternalSerializers.create(rightRowType),
-                            isLeftOuterJoin,
-                            asyncLookupOptions.asyncBufferCapacity);
-        } else {
-            // right type is the same as table source row type, because no calc after temporal table
-            asyncFunc =
-                    new AsyncLookupJoinRunner(
-                            generatedFuncWithType.tableFunc(),
-                            (DataStructureConverter<RowData, Object>) fetcherConverter,
-                            generatedResultFuture,
-                            generatedPreFilterCondition,
-                            InternalSerializers.create(rightRowType),
-                            isLeftOuterJoin,
-                            asyncLookupOptions.asyncBufferCapacity);
+                            "TableFunctionResultFuture",
+                            inputRowType,
+                            rightRowType,
+                            JavaScalaConversionUtil.toScala(
+                                    Optional.ofNullable(remainingJoinCondition)));
+            GeneratedFilterCondition generatedPreFilterCondition =
+                    FilterCodeGenerator.generateFilterCondition(
+                            config, classLoader, preFilterCondition, inputRowType);
+
+            DataStructureConverter<?, ?> fetcherConverter =
+                    DataStructureConverters.getConverter(generatedFuncWithType.dataType());
+            if (projectionOnTemporalTable != null) {
+                // a projection or filter after table source scan
+                GeneratedFunction<FlatMapFunction<RowData, RowData>> generatedCalc =
+                        LookupJoinCodeGenerator.generateCalcMapFunction(
+                                config,
+                                classLoader,
+                                JavaScalaConversionUtil.toScala(projectionOnTemporalTable),
+                                filterOnTemporalTable,
+                                projectionOutputRelDataType,
+                                tableSourceRowType);
+                asyncFunc =
+                        new AsyncLookupJoinWithCalcRunner(
+                                generatedFuncWithType.tableFunc(),
+                                (DataStructureConverter<RowData, Object>) fetcherConverter,
+                                generatedCalc,
+                                generatedResultFuture,
+                                generatedPreFilterCondition,
+                                InternalSerializers.create(rightRowType),
+                                isLeftOuterJoin,
+                                asyncLookupOptions.asyncBufferCapacity);
+            } else {
+                // right type is the same as table source row type, because no calc after temporal
+                // table
+                asyncFunc =
+                        new AsyncLookupJoinRunner(
+                                generatedFuncWithType.tableFunc(),
+                                (DataStructureConverter<RowData, Object>) fetcherConverter,
+                                generatedResultFuture,
+                                generatedPreFilterCondition,
+                                InternalSerializers.create(rightRowType),
+                                isLeftOuterJoin,
+                                asyncLookupOptions.asyncBufferCapacity);
+            }
         }
         if (asyncLookupOptions.keyOrdered) {
             Preconditions.checkState(

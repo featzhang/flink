@@ -475,6 +475,28 @@ public class OptimizerConfigOptions {
         }
     }
 
+    @Documentation.TableOption(execMode = Documentation.ExecMode.STREAMING)
+    public static final ConfigOption<Boolean> TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_ENABLED =
+            key("table.optimizer.dim-lookup-join.batch.enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("Whether to enable the dim table batch lookup join.");
+
+    @Documentation.TableOption(execMode = Documentation.ExecMode.STREAMING)
+    public static final ConfigOption<Integer> TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_SIZE =
+            key("table.optimizer.dim-lookup-join.batch.size")
+                    .intType()
+                    .defaultValue(100)
+                    .withDescription("The batch size of dim table lookup join.");
+
+    @Documentation.TableOption(execMode = Documentation.ExecMode.STREAMING)
+    public static final ConfigOption<Long> TABLE_OPTIMIZER_DIM_LOOKUP_JOIN_BATCH_FLUSH_MILLIS =
+            key("table.optimizer.dim-lookup-join.batch.flush.millis")
+                    .longType()
+                    .defaultValue(2000L)
+                    .withDescription(
+                            "The flush interval of dim table lookup join in batch mode, in millis.");
+
     /** Strategy for delta join. */
     @PublicEvolving
     public enum DeltaJoinStrategy implements DescribedEnum {
