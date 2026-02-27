@@ -154,6 +154,9 @@ import org.apache.flink.runtime.rest.messages.cluster.JobManagerProfilingHeaders
 import org.apache.flink.runtime.rest.messages.cluster.JobManagerProfilingListHeaders;
 import org.apache.flink.runtime.rest.messages.cluster.JobManagerStdoutFileHeader;
 import org.apache.flink.runtime.rest.messages.cluster.JobManagerThreadDumpHeaders;
+import org.apache.flink.runtime.rest.messages.cluster.NodeQuarantineHeaders;
+import org.apache.flink.runtime.rest.messages.cluster.NodeQuarantineListHeaders;
+import org.apache.flink.runtime.rest.messages.cluster.NodeUnquarantineHeaders;
 import org.apache.flink.runtime.rest.messages.cluster.ShutdownHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobDetailsHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobManagerJobConfigurationHeaders;
@@ -996,12 +999,9 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
 
         handlers.add(Tuple2.of(shutdownHandler.getMessageHeaders(), shutdownHandler));
 
+        handlers.add(Tuple2.of(nodeQuarantineHandler.getMessageHeaders(), nodeQuarantineHandler));
         handlers.add(
-                Tuple2.of(
-                        nodeQuarantineHandler.getMessageHeaders(), nodeQuarantineHandler));
-        handlers.add(
-                Tuple2.of(
-                        nodeUnquarantineHandler.getMessageHeaders(), nodeUnquarantineHandler));
+                Tuple2.of(nodeUnquarantineHandler.getMessageHeaders(), nodeUnquarantineHandler));
         handlers.add(
                 Tuple2.of(
                         nodeQuarantineListHandler.getMessageHeaders(), nodeQuarantineListHandler));

@@ -19,35 +19,24 @@
 package org.apache.flink.runtime.rest.messages.cluster;
 
 import org.apache.flink.runtime.rest.HttpMethodWrapper;
-import org.apache.flink.runtime.rest.handler.async.AsynchronousOperationResult;
-import org.apache.flink.runtime.rest.messages.EmptyResponseBody;
-import org.apache.flink.runtime.rest.messages.MessageHeaders;
+import org.apache.flink.runtime.rest.messages.RuntimeMessageHeaders;
 
-/**
- * Headers for quarantining a node.
- */
+import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
+
+/** Message headers for node quarantine handler. */
 public class NodeQuarantineHeaders
-        implements MessageHeaders<
-                NodeQuarantineRequestBody, NodeQuarantineResponseBody, NodeQuarantineMessageParameters> {
+        implements RuntimeMessageHeaders<
+                NodeQuarantineRequestBody,
+                NodeQuarantineResponseBody,
+                NodeQuarantineMessageParameters> {
 
     private static final NodeQuarantineHeaders INSTANCE = new NodeQuarantineHeaders();
 
-    public static final String URL = "/cluster/nodes/:" + ResourceIdPathParameter.KEY + "/quarantine";
-
     private NodeQuarantineHeaders() {}
-
-    public static NodeQuarantineHeaders getInstance() {
-        return INSTANCE;
-    }
 
     @Override
     public Class<NodeQuarantineRequestBody> getRequestClass() {
         return NodeQuarantineRequestBody.class;
-    }
-
-    @Override
-    public Class<NodeQuarantineResponseBody> getResponseClass() {
-        return NodeQuarantineResponseBody.class;
     }
 
     @Override
@@ -57,16 +46,35 @@ public class NodeQuarantineHeaders
 
     @Override
     public String getTargetRestEndpointURL() {
-        return URL;
+        return "/cluster/nodes/:" + ResourceIdPathParameter.KEY + "/quarantine";
     }
 
     @Override
-    public Class<NodeQuarantineMessageParameters> getUnresolvedMessageParameters() {
-        return NodeQuarantineMessageParameters.class;
+    public Class<NodeQuarantineResponseBody> getResponseClass() {
+        return NodeQuarantineResponseBody.class;
+    }
+
+    @Override
+    public HttpResponseStatus getResponseStatusCode() {
+        return HttpResponseStatus.OK;
+    }
+
+    @Override
+    public NodeQuarantineMessageParameters getUnresolvedMessageParameters() {
+        return NodeQuarantineMessageParameters.getInstance();
+    }
+
+    public static NodeQuarantineHeaders getInstance() {
+        return INSTANCE;
     }
 
     @Override
     public String getDescription() {
-        return "Quarantine a node to prevent slot allocation.";
+        return "Quarantine a node by its resource ID";
+    }
+
+    @Override
+    public String operationId() {
+        return "quarantineNode";
     }
 }

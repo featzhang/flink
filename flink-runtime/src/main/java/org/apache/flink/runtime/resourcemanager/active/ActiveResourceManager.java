@@ -31,6 +31,7 @@ import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.instance.InstanceID;
 import org.apache.flink.runtime.io.network.partition.ResourceManagerPartitionTrackerFactory;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.metrics.MetricNames;
 import org.apache.flink.runtime.metrics.ThresholdMeter;
 import org.apache.flink.runtime.metrics.groups.ResourceManagerMetricGroup;
@@ -642,6 +643,29 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
     @Override
     protected ResourceAllocator getResourceAllocator() {
         return new ResourceAllocatorImpl();
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> quarantineNode(
+            ResourceID resourceId,
+            String hostname,
+            String reason,
+            long durationMs,
+            Duration timeout) {
+        return super.quarantineNode(resourceId, hostname, reason, durationMs, timeout);
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> removeNodeQuarantine(
+            ResourceID resourceId, Duration timeout) {
+        return super.removeNodeQuarantine(resourceId, timeout);
+    }
+
+    @Override
+    public CompletableFuture<
+                    Collection<org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus>>
+            listQuarantinedNodes(Duration timeout) {
+        return super.listQuarantinedNodes(timeout);
     }
 
     private void tryRemovePreviousPendingRecoveryTaskManager(ResourceID resourceID) {

@@ -18,30 +18,29 @@
 
 package org.apache.flink.runtime.rest.messages.cluster;
 
-import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.rest.messages.MessagePathParameter;
 
-/** Resource id path parameter used by node quarantine handlers. */
-public class ResourceIdPathParameter extends MessagePathParameter<ResourceID> {
+/** Path parameter for the resource ID. */
+public class ResourceIdPathParameter extends MessagePathParameter<String> {
 
-    public static final String KEY = "resourceId";
+    public static final String KEY = "resourceid";
 
     public ResourceIdPathParameter() {
         super(KEY);
     }
 
     @Override
-    protected ResourceID convertFromString(String value) {
-        return new ResourceID(value);
+    protected String convertFromString(String value) {
+        return value;
     }
 
     @Override
-    protected String convertToString(ResourceID value) {
-        return value.getResourceIdString();
+    protected String convertToString(String value) {
+        return value;
     }
 
     @Override
     public String getDescription() {
-        return "String that identifies a resource (node).";
+        return "The resource ID of the node";
     }
 }

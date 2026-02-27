@@ -18,19 +18,20 @@
 
 package org.apache.flink.runtime.rest.messages.cluster;
 
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.flink.runtime.rest.messages.RequestBody;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.Duration;
 import java.util.Objects;
 
-/**
- * Request body for quarantining a node.
- */
-public class NodeQuarantineRequestBody {
+/** Request body for quarantining a node. */
+public class NodeQuarantineRequestBody implements RequestBody {
 
     public static final String FIELD_NAME_REASON = "reason";
     public static final String FIELD_NAME_DURATION_MS = "durationMs";
+    public static final String FIELD_NAME_HOSTNAME = "hostname";
 
     @JsonProperty(FIELD_NAME_REASON)
     private final String reason;
@@ -38,12 +39,17 @@ public class NodeQuarantineRequestBody {
     @JsonProperty(FIELD_NAME_DURATION_MS)
     private final long durationMs;
 
+    @JsonProperty(FIELD_NAME_HOSTNAME)
+    private final String hostname;
+
     @JsonCreator
     public NodeQuarantineRequestBody(
             @JsonProperty(FIELD_NAME_REASON) String reason,
-            @JsonProperty(FIELD_NAME_DURATION_MS) long durationMs) {
+            @JsonProperty(FIELD_NAME_DURATION_MS) long durationMs,
+            @JsonProperty(FIELD_NAME_HOSTNAME) String hostname) {
         this.reason = reason;
         this.durationMs = durationMs;
+        this.hostname = hostname;
     }
 
     @JsonProperty(FIELD_NAME_REASON)
@@ -54,6 +60,11 @@ public class NodeQuarantineRequestBody {
     @JsonProperty(FIELD_NAME_DURATION_MS)
     public long getDurationMs() {
         return durationMs;
+    }
+
+    @JsonProperty(FIELD_NAME_HOSTNAME)
+    public String getHostname() {
+        return hostname;
     }
 
     public Duration getDuration() {
@@ -69,12 +80,14 @@ public class NodeQuarantineRequestBody {
             return false;
         }
         NodeQuarantineRequestBody that = (NodeQuarantineRequestBody) o;
-        return durationMs == that.durationMs && Objects.equals(reason, that.reason);
+        return durationMs == that.durationMs
+                && Objects.equals(reason, that.reason)
+                && Objects.equals(hostname, that.hostname);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(reason, durationMs);
+        return Objects.hash(reason, durationMs, hostname);
     }
 
     @Override
@@ -85,6 +98,9 @@ public class NodeQuarantineRequestBody {
                 + '\''
                 + ", durationMs="
                 + durationMs
+                + ", hostname='"
+                + hostname
+                + '\''
                 + '}';
     }
 }

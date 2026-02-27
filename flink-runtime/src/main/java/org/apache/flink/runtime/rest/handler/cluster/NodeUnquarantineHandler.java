@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.rest.handler.cluster;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.rest.handler.AbstractRestHandler;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
 import org.apache.flink.runtime.rest.handler.RestHandlerException;
@@ -36,9 +37,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * REST handler which allows to remove quarantine from a node by its resource ID.
- */
+/** REST handler which allows to remove quarantine from a node by its resource ID. */
 public class NodeUnquarantineHandler
         extends AbstractRestHandler<
                 RestfulGateway,
@@ -50,7 +49,8 @@ public class NodeUnquarantineHandler
             final GatewayRetriever<? extends RestfulGateway> leaderRetriever,
             final Duration timeout,
             final Map<String, String> responseHeaders,
-            final MessageHeaders<EmptyRequestBody, EmptyResponseBody, NodeQuarantineMessageParameters>
+            final MessageHeaders<
+                            EmptyRequestBody, EmptyResponseBody, NodeQuarantineMessageParameters>
                     messageHeaders) {
         super(leaderRetriever, timeout, responseHeaders, messageHeaders);
     }
@@ -60,10 +60,21 @@ public class NodeUnquarantineHandler
             @Nonnull final HandlerRequest<EmptyRequestBody> request,
             @Nonnull final RestfulGateway gateway)
             throws RestHandlerException {
+        if (!(gateway instanceof ResourceManagerGateway)) {
+            return CompletableFuture.failedFuture(
+                    new RestHandlerException(
+                            "Gateway is not a ResourceManagerGateway",
+                            org.apache.flink.shaded.netty4.io.netty.handler.codec.http
+                                    .HttpResponseStatus.INTERNAL_SERVER_ERROR));
+        }
+
         final String resourceId = request.getPathParameter(ResourceIdPathParameter.class);
 
-        return gateway
-                .removeNodeQuarantine(ResourceID.fromString(resourceId), timeout)
+        final ResourceID nodeResourceID = new ResourceID(resourceId);
+
+        final ResourceManagerGateway rmGateway = (ResourceManagerGateway) gateway;
+        return rmGateway
+                .removeNodeQuarantine(nodeResourceID, timeout)
                 .thenApply(acknowledge -> EmptyResponseBody.getInstance());
     }
 }

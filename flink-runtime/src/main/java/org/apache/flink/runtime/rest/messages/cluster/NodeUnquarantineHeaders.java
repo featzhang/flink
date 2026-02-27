@@ -20,34 +20,23 @@ package org.apache.flink.runtime.rest.messages.cluster;
 
 import org.apache.flink.runtime.rest.HttpMethodWrapper;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
-import org.apache.flink.runtime.rest.messages.MessageHeaders;
+import org.apache.flink.runtime.rest.messages.EmptyResponseBody;
+import org.apache.flink.runtime.rest.messages.RuntimeMessageHeaders;
 
-/**
- * Headers for removing a node from quarantine.
- */
+import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
+
+/** Message headers for node unquarantine handler. */
 public class NodeUnquarantineHeaders
-        implements MessageHeaders<
+        implements RuntimeMessageHeaders<
                 EmptyRequestBody, EmptyResponseBody, NodeQuarantineMessageParameters> {
 
     private static final NodeUnquarantineHeaders INSTANCE = new NodeUnquarantineHeaders();
 
-    public static final String URL =
-            "/cluster/nodes/:" + ResourceIdPathParameter.KEY + "/quarantine";
-
     private NodeUnquarantineHeaders() {}
-
-    public static NodeUnquarantineHeaders getInstance() {
-        return INSTANCE;
-    }
 
     @Override
     public Class<EmptyRequestBody> getRequestClass() {
         return EmptyRequestBody.class;
-    }
-
-    @Override
-    public Class<EmptyResponseBody> getResponseClass() {
-        return EmptyResponseBody.class;
     }
 
     @Override
@@ -57,16 +46,35 @@ public class NodeUnquarantineHeaders
 
     @Override
     public String getTargetRestEndpointURL() {
-        return URL;
+        return "/cluster/nodes/:" + ResourceIdPathParameter.KEY + "/quarantine";
     }
 
     @Override
-    public Class<NodeQuarantineMessageParameters> getUnresolvedMessageParameters() {
-        return NodeQuarantineMessageParameters.class;
+    public Class<EmptyResponseBody> getResponseClass() {
+        return EmptyResponseBody.class;
+    }
+
+    @Override
+    public HttpResponseStatus getResponseStatusCode() {
+        return HttpResponseStatus.OK;
+    }
+
+    @Override
+    public NodeQuarantineMessageParameters getUnresolvedMessageParameters() {
+        return NodeQuarantineMessageParameters.getInstance();
+    }
+
+    public static NodeUnquarantineHeaders getInstance() {
+        return INSTANCE;
     }
 
     @Override
     public String getDescription() {
-        return "Remove a node from quarantine.";
+        return "Remove quarantine from a node by its resource ID";
+    }
+
+    @Override
+    public String operationId() {
+        return "unquarantineNode";
     }
 }

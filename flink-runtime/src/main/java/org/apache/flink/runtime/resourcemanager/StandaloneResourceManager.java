@@ -24,6 +24,7 @@ import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.io.network.partition.ResourceManagerPartitionTrackerFactory;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.metrics.groups.ResourceManagerMetricGroup;
 import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerException;
 import org.apache.flink.runtime.resourcemanager.slotmanager.NonSupportedResourceAllocatorImpl;
@@ -37,6 +38,7 @@ import org.apache.flink.util.Preconditions;
 import javax.annotation.Nullable;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -128,5 +130,35 @@ public class StandaloneResourceManager extends ResourceManager<ResourceID> {
     @Override
     protected ResourceAllocator getResourceAllocator() {
         return NonSupportedResourceAllocatorImpl.INSTANCE;
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> quarantineNode(
+            ResourceID resourceId,
+            String hostname,
+            String reason,
+            long durationMs,
+            Duration timeout) {
+        // StandaloneResourceManager does not support node quarantine
+        return CompletableFuture.failedFuture(
+                new UnsupportedOperationException(
+                        "StandaloneResourceManager does not support node quarantine"));
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> removeNodeQuarantine(
+            ResourceID resourceId, Duration timeout) {
+        // StandaloneResourceManager does not support node quarantine
+        return CompletableFuture.failedFuture(
+                new UnsupportedOperationException(
+                        "StandaloneResourceManager does not support node quarantine"));
+    }
+
+    @Override
+    public CompletableFuture<
+                    Collection<org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus>>
+            listQuarantinedNodes(Duration timeout) {
+        // StandaloneResourceManager does not support node quarantine
+        return CompletableFuture.completedFuture(java.util.Collections.emptyList());
     }
 }

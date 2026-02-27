@@ -574,4 +574,27 @@ public class TestingResourceManagerGateway implements ResourceManagerGateway {
     public CompletableFuture<Acknowledge> notifyNewBlockedNodes(Collection<BlockedNode> newNodes) {
         return notifyNewBlockedNodesFunction.apply(newNodes);
     }
+
+    @Override
+    public CompletableFuture<Acknowledge> quarantineNode(
+            ResourceID resourceId,
+            String hostname,
+            String reason,
+            long durationMs,
+            Duration timeout) {
+        return CompletableFuture.completedFuture(Acknowledge.get());
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> removeNodeQuarantine(
+            ResourceID resourceId, Duration timeout) {
+        return CompletableFuture.completedFuture(Acknowledge.get());
+    }
+
+    @Override
+    public CompletableFuture<
+                    Collection<org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus>>
+            listQuarantinedNodes(Duration timeout) {
+        return CompletableFuture.completedFuture(Collections.emptyList());
+    }
 }

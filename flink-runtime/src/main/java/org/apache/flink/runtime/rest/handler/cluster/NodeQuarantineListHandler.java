@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.rest.handler.cluster;
 
+import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.rest.handler.AbstractRestHandler;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
 import org.apache.flink.runtime.rest.handler.RestHandlerException;
@@ -31,14 +32,11 @@ import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import javax.annotation.Nonnull;
 
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
-/**
- * REST handler which allows to list all quarantined nodes.
- */
+/** REST handler which allows to list all quarantined nodes. */
 public class NodeQuarantineListHandler
         extends AbstractRestHandler<
                 RestfulGateway,
@@ -50,7 +48,10 @@ public class NodeQuarantineListHandler
             final GatewayRetriever<? extends RestfulGateway> leaderRetriever,
             final Duration timeout,
             final Map<String, String> responseHeaders,
-            final MessageHeaders<EmptyRequestBody, NodeQuarantineListResponseBody, EmptyMessageParameters>
+            final MessageHeaders<
+                            EmptyRequestBody,
+                            NodeQuarantineListResponseBody,
+                            EmptyMessageParameters>
                     messageHeaders) {
         super(leaderRetriever, timeout, responseHeaders, messageHeaders);
     }
@@ -60,24 +61,30 @@ public class NodeQuarantineListHandler
             @Nonnull final HandlerRequest<EmptyRequestBody> request,
             @Nonnull final RestfulGateway gateway)
             throws RestHandlerException {
-        return gateway
+        if (!(gateway instanceof ResourceManagerGateway)) {
+            return CompletableFuture.failedFuture(
+                    new RestHandlerException(
+                            "Gateway is not a ResourceManagerGateway",
+                            org.apache.flink.shaded.netty4.io.netty.handler.codec.http
+                                    .HttpResponseStatus.INTERNAL_SERVER_ERROR));
+        }
+
+        final ResourceManagerGateway rmGateway = (ResourceManagerGateway) gateway;
+        return rmGateway
                 .listQuarantinedNodes(timeout)
                 .thenApply(
-                        nodes -> {
-                            Collection<NodeQuarantineListResponseBody.QuarantinedNodeInfo> infos =
-                                    nodes.stream()
-                                            .map(
-                                                    node ->
-                                                            new NodeQuarantineListResponseBody
-                                                                    .QuarantinedNodeInfo(
-                                                                    node.getResourceId()
-                                                                            .toString(),
-                                                                    node.getHostname(),
-                                                                    node.getReason(),
-                                                                    node.getQuarantineTime(),
-                                                                    node.getExpirationTime()))
-                                            .collect(Collectors.toList());
-                            return new NodeQuarantineListResponseBody(infos);
-                        });
+                        quarantinedNodes ->
+                                new NodeQuarantineListResponseBody(
+                                        quarantinedNodes.stream()
+                                                .map(
+                                                        q ->
+                                                                new NodeQuarantineListResponseBody
+                                                                        .QuarantinedNodeInfo(
+                                                                        q.getResourceID()
+                                                                                .getResourceIdString(),
+                                                                        q.getReason(),
+                                                                        q.getQuarantineTimestamp(),
+                                                                        q.getExpirationTimestamp()))
+                                                .collect(Collectors.toList())));
     }
 }

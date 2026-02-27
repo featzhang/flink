@@ -21,33 +21,22 @@ package org.apache.flink.runtime.rest.messages.cluster;
 import org.apache.flink.runtime.rest.HttpMethodWrapper;
 import org.apache.flink.runtime.rest.messages.EmptyMessageParameters;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
-import org.apache.flink.runtime.rest.messages.MessageHeaders;
+import org.apache.flink.runtime.rest.messages.RuntimeMessageHeaders;
 
-/**
- * Headers for listing all quarantined nodes.
- */
+import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
+
+/** Message headers for node quarantine list handler. */
 public class NodeQuarantineListHeaders
-        implements MessageHeaders<
+        implements RuntimeMessageHeaders<
                 EmptyRequestBody, NodeQuarantineListResponseBody, EmptyMessageParameters> {
 
     private static final NodeQuarantineListHeaders INSTANCE = new NodeQuarantineListHeaders();
 
-    public static final String URL = "/cluster/nodes/quarantine";
-
     private NodeQuarantineListHeaders() {}
-
-    public static NodeQuarantineListHeaders getInstance() {
-        return INSTANCE;
-    }
 
     @Override
     public Class<EmptyRequestBody> getRequestClass() {
         return EmptyRequestBody.class;
-    }
-
-    @Override
-    public Class<NodeQuarantineListResponseBody> getResponseClass() {
-        return NodeQuarantineListResponseBody.class;
     }
 
     @Override
@@ -57,16 +46,35 @@ public class NodeQuarantineListHeaders
 
     @Override
     public String getTargetRestEndpointURL() {
-        return URL;
+        return "/cluster/nodes/quarantine";
     }
 
     @Override
-    public Class<EmptyMessageParameters> getUnresolvedMessageParameters() {
-        return EmptyMessageParameters.class;
+    public Class<NodeQuarantineListResponseBody> getResponseClass() {
+        return NodeQuarantineListResponseBody.class;
+    }
+
+    @Override
+    public HttpResponseStatus getResponseStatusCode() {
+        return HttpResponseStatus.OK;
+    }
+
+    @Override
+    public EmptyMessageParameters getUnresolvedMessageParameters() {
+        return EmptyMessageParameters.getInstance();
+    }
+
+    public static NodeQuarantineListHeaders getInstance() {
+        return INSTANCE;
     }
 
     @Override
     public String getDescription() {
-        return "List all quarantined nodes.";
+        return "List all quarantined nodes";
+    }
+
+    @Override
+    public String operationId() {
+        return "listQuarantinedNodes";
     }
 }

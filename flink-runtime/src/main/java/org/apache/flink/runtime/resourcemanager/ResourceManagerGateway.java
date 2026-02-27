@@ -310,19 +310,29 @@ public interface ResourceManagerGateway
      * @param timeout timeout of the asynchronous operation
      * @return Future which is completed when the node is quarantined
      */
+    /**
+     * Quarantine a node by its resource ID.
+     *
+     * @param resourceId the resource ID of the node to quarantine
+     * @param hostname the hostname of the node
+     * @param reason the reason for quarantining
+     * @param durationMs duration in milliseconds for the quarantine
+     * @param timeout timeout of the asynchronous operation
+     * @return Future containing an acknowledgement
+     */
     CompletableFuture<Acknowledge> quarantineNode(
             ResourceID resourceId,
             String hostname,
             String reason,
-            Duration duration,
+            long durationMs,
             @RpcTimeout Duration timeout);
 
     /**
-     * Remove a node from quarantine.
+     * Remove quarantine from a node by its resource ID.
      *
-     * @param resourceId the resource ID of the node to remove from quarantine
+     * @param resourceId the resource ID of the node to remove quarantine from
      * @param timeout timeout of the asynchronous operation
-     * @return Future which is completed when the node is removed from quarantine
+     * @return Future containing an acknowledgement
      */
     CompletableFuture<Acknowledge> removeNodeQuarantine(
             ResourceID resourceId, @RpcTimeout Duration timeout);

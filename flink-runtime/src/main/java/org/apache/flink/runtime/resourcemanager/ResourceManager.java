@@ -58,6 +58,7 @@ import org.apache.flink.runtime.resourcemanager.exceptions.UnknownTaskExecutorEx
 import org.apache.flink.runtime.resourcemanager.health.NoOpNodeHealthManager;
 import org.apache.flink.runtime.resourcemanager.health.NodeHealthManager;
 import org.apache.flink.runtime.resourcemanager.health.NodeHealthManagerBlockedTaskManagerChecker;
+import org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus;
 import org.apache.flink.runtime.resourcemanager.registration.JobManagerRegistration;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
 import org.apache.flink.runtime.resourcemanager.registration.WorkerRegistration;
@@ -1674,13 +1675,18 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 
     @Override
     public CompletableFuture<Acknowledge> quarantineNode(
-            ResourceID resourceId, String hostname, String reason, Duration duration, Duration timeout) {
+            ResourceID resourceId,
+            String hostname,
+            String reason,
+            long durationMs,
+            Duration timeout) {
         log.info(
-                "Quarantining node {} (hostname: {}) for reason: {}, duration: {}",
+                "Quarantining node {} (hostname: {}) for reason: {}, duration: {}ms",
                 resourceId,
                 hostname,
                 reason,
-                duration);
+                durationMs);
+        Duration duration = Duration.ofMillis(durationMs);
         nodeHealthManager.markQuarantined(resourceId, hostname, reason, duration);
         return CompletableFuture.completedFuture(Acknowledge.get());
     }

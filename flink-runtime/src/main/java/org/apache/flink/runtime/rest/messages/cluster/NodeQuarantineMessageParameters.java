@@ -25,12 +25,19 @@ import org.apache.flink.runtime.rest.messages.MessageQueryParameter;
 import java.util.Collection;
 import java.util.Collections;
 
-/**
- * Message parameters for node quarantine handlers.
- */
+/** Message parameters for node quarantine handlers. */
 public class NodeQuarantineMessageParameters extends MessageParameters {
 
     public final ResourceIdPathParameter resourceIdParameter = new ResourceIdPathParameter();
+
+    private static final NodeQuarantineMessageParameters INSTANCE =
+            new NodeQuarantineMessageParameters();
+
+    private NodeQuarantineMessageParameters() {}
+
+    public static NodeQuarantineMessageParameters getInstance() {
+        return INSTANCE;
+    }
 
     @Override
     public Collection<MessagePathParameter<?>> getPathParameters() {

@@ -19,10 +19,10 @@
 package org.apache.flink.runtime.rest.handler.cluster;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.rest.handler.AbstractRestHandler;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
 import org.apache.flink.runtime.rest.handler.RestHandlerException;
-import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
 import org.apache.flink.runtime.rest.messages.cluster.NodeQuarantineMessageParameters;
 import org.apache.flink.runtime.rest.messages.cluster.NodeQuarantineRequestBody;
@@ -37,9 +37,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * REST handler which allows to quarantine a node by its resource ID.
- */
+/** REST handler which allows to quarantine a node. */
 public class NodeQuarantineHandler
         extends AbstractRestHandler<
                 RestfulGateway,
@@ -51,7 +49,10 @@ public class NodeQuarantineHandler
             final GatewayRetriever<? extends RestfulGateway> leaderRetriever,
             final Duration timeout,
             final Map<String, String> responseHeaders,
-            final MessageHeaders<NodeQuarantineRequestBody, NodeQuarantineResponseBody, NodeQuarantineMessageParameters>
+            final MessageHeaders<
+                            NodeQuarantineRequestBody,
+                            NodeQuarantineResponseBody,
+                            NodeQuarantineMessageParameters>
                     messageHeaders) {
         super(leaderRetriever, timeout, responseHeaders, messageHeaders);
     }
@@ -61,16 +62,28 @@ public class NodeQuarantineHandler
             @Nonnull final HandlerRequest<NodeQuarantineRequestBody> request,
             @Nonnull final RestfulGateway gateway)
             throws RestHandlerException {
-        final NodeQuarantineRequestBody requestBody = request.getRequestBody();
-        final String resourceId = request.getPathParameter(ResourceIdPathParameter.class);
+        if (!(gateway instanceof ResourceManagerGateway)) {
+            return CompletableFuture.failedFuture(
+                    new RestHandlerException(
+                            "Gateway is not a ResourceManagerGateway",
+                            org.apache.flink.shaded.netty4.io.netty.handler.codec.http
+                                    .HttpResponseStatus.INTERNAL_SERVER_ERROR));
+        }
 
-        return gateway
-                .quarantineNode(
-                        ResourceID.fromString(resourceId),
-                        requestBody.getHostname(),
-                        requestBody.getReason(),
-                        Duration.ofMillis(requestBody.getDurationMs()),
-                        timeout)
-                .thenApply(acknowledge -> NodeQuarantineResponseBody.getInstance());
+        final String resourceId = request.getPathParameter(ResourceIdPathParameter.class);
+        final NodeQuarantineRequestBody requestBody = request.getRequestBody();
+
+        final ResourceID nodeResourceID = new ResourceID(resourceId);
+        final String hostname = requestBody.getHostname();
+        final String reason = requestBody.getReason();
+        final long durationMs = requestBody.getDurationMs();
+
+        final ResourceManagerGateway rmGateway = (ResourceManagerGateway) gateway;
+        return rmGateway
+                .quarantineNode(nodeResourceID, hostname, reason, durationMs, timeout)
+                .thenApply(
+                        acknowledge ->
+                                new NodeQuarantineResponseBody(
+                                        resourceId, reason, System.currentTimeMillis()));
     }
 }
