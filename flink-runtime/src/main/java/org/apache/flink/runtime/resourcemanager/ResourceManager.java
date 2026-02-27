@@ -24,8 +24,10 @@ import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.blob.TransientBlobKey;
 import org.apache.flink.runtime.blocklist.BlockedNode;
+import org.apache.flink.runtime.blocklist.BlockedTaskManagerChecker;
 import org.apache.flink.runtime.blocklist.BlocklistContext;
 import org.apache.flink.runtime.blocklist.BlocklistHandler;
+import org.apache.flink.runtime.blocklist.CompositeBlockedTaskManagerChecker;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
@@ -55,6 +57,7 @@ import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerExcept
 import org.apache.flink.runtime.resourcemanager.exceptions.UnknownTaskExecutorException;
 import org.apache.flink.runtime.resourcemanager.health.NoOpNodeHealthManager;
 import org.apache.flink.runtime.resourcemanager.health.NodeHealthManager;
+import org.apache.flink.runtime.resourcemanager.health.NodeHealthManagerBlockedTaskManagerChecker;
 import org.apache.flink.runtime.resourcemanager.registration.JobManagerRegistration;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
 import org.apache.flink.runtime.resourcemanager.registration.WorkerRegistration;
@@ -279,12 +282,19 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 
             startHeartbeatServices();
 
+            // Create a composite blocked task manager checker that combines both
+            // the existing blocklist handler and the new NodeHealthManager
+            BlockedTaskManagerChecker compositeChecker =
+                    new CompositeBlockedTaskManagerChecker(
+                            blocklistHandler::isBlockedTaskManager,
+                            new NodeHealthManagerBlockedTaskManagerChecker(nodeHealthManager));
+
             slotManager.start(
                     getFencingToken(),
                     getMainThreadExecutor(),
                     resourceAllocator,
                     new ResourceEventListenerImpl(),
-                    blocklistHandler::isBlockedTaskManager);
+                    compositeChecker);
 
             delegationTokenManager.start(this);
 
@@ -1582,14 +1592,53 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 
     private class ResourceManagerBlocklistContext implements BlocklistContext {
         @Override
-        public void blockResources(Collection<BlockedNode> blockedNodes) {}
+        public void blockResources(Collection<BlockedNode> blockedNodes) {
+            // When resources are blocked, mark the corresponding nodes as quarantined in
+            // NodeHealthManager
+            for (BlockedNode blockedNode : blockedNodes) {
+                ResourceID resourceID = getResourceIdOfNodeId(blockedNode.getNodeId());
+                if (resourceID != null) {
+                    long durationMillis =
+                            blockedNode.getEndTimestamp() - System.currentTimeMillis();
+                    if (durationMillis > 0) {
+                        nodeHealthManager.markQuarantined(
+                                resourceID,
+                                blockedNode.getNodeId(),
+                                blockedNode.getCause(),
+                                Duration.ofMillis(durationMillis));
+                    }
+                }
+            }
+        }
 
         @Override
-        public void unblockResources(Collection<BlockedNode> unBlockedNodes) {
+        public void unblockResources(Collection<BlockedNode> unblockedNodes) {
             // when a node is unblocked, we should trigger the resource requirements because the
             // slots on this node become available again.
+            // Also remove the quarantine from NodeHealthManager
+            for (BlockedNode unblockedNode : unblockedNodes) {
+                ResourceID resourceID = getResourceIdOfNodeId(unblockedNode.getNodeId());
+                if (resourceID != null) {
+                    nodeHealthManager.removeQuarantine(resourceID);
+                }
+            }
             slotManager.triggerResourceRequirementsCheck();
         }
+    }
+
+    /**
+     * Get ResourceID by nodeId. This is a helper method to map node IDs to resource IDs. Returns
+     * null if no matching resource ID is found.
+     */
+    private ResourceID getResourceIdOfNodeId(String nodeId) {
+        // Iterate through taskExecutors to find the ResourceID matching the nodeId
+        for (Map.Entry<ResourceID, WorkerRegistration<WorkerType>> entry :
+                taskExecutors.entrySet()) {
+            if (nodeId.equals(entry.getValue().getNodeId())) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 
     // ------------------------------------------------------------------------
