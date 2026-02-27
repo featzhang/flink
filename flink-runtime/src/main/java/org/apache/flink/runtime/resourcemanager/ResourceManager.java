@@ -1667,4 +1667,34 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
             FutureUtils.combineAll(futures).get();
         }
     }
+
+    // ------------------------------------------------------------------------
+    //  Node Quarantine Management
+    // ------------------------------------------------------------------------
+
+    @Override
+    public CompletableFuture<Acknowledge> quarantineNode(
+            ResourceID resourceId, String hostname, String reason, Duration duration, Duration timeout) {
+        log.info(
+                "Quarantining node {} (hostname: {}) for reason: {}, duration: {}",
+                resourceId,
+                hostname,
+                reason,
+                duration);
+        nodeHealthManager.markQuarantined(resourceId, hostname, reason, duration);
+        return CompletableFuture.completedFuture(Acknowledge.get());
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> removeNodeQuarantine(
+            ResourceID resourceId, Duration timeout) {
+        log.info("Removing quarantine from node {}", resourceId);
+        nodeHealthManager.removeQuarantine(resourceId);
+        return CompletableFuture.completedFuture(Acknowledge.get());
+    }
+
+    @Override
+    public CompletableFuture<Collection<NodeHealthStatus>> listQuarantinedNodes(Duration timeout) {
+        return CompletableFuture.completedFuture(nodeHealthManager.listAll());
+    }
 }

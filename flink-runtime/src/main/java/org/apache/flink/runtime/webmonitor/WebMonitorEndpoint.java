@@ -49,6 +49,9 @@ import org.apache.flink.runtime.rest.handler.cluster.JobManagerProfilingFileHand
 import org.apache.flink.runtime.rest.handler.cluster.JobManagerProfilingHandler;
 import org.apache.flink.runtime.rest.handler.cluster.JobManagerProfilingListHandler;
 import org.apache.flink.runtime.rest.handler.cluster.JobManagerThreadDumpHandler;
+import org.apache.flink.runtime.rest.handler.cluster.NodeQuarantineHandler;
+import org.apache.flink.runtime.rest.handler.cluster.NodeQuarantineListHandler;
+import org.apache.flink.runtime.rest.handler.cluster.NodeUnquarantineHandler;
 import org.apache.flink.runtime.rest.handler.cluster.ShutdownHandler;
 import org.apache.flink.runtime.rest.handler.dataset.ClusterDataSetDeleteHandlers;
 import org.apache.flink.runtime.rest.handler.dataset.ClusterDataSetListHandler;
@@ -760,6 +763,27 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
                 new ShutdownHandler(
                         leaderRetriever, timeout, responseHeaders, ShutdownHeaders.getInstance());
 
+        final NodeQuarantineHandler nodeQuarantineHandler =
+                new NodeQuarantineHandler(
+                        leaderRetriever,
+                        timeout,
+                        responseHeaders,
+                        NodeQuarantineHeaders.getInstance());
+
+        final NodeUnquarantineHandler nodeUnquarantineHandler =
+                new NodeUnquarantineHandler(
+                        leaderRetriever,
+                        timeout,
+                        responseHeaders,
+                        NodeUnquarantineHeaders.getInstance());
+
+        final NodeQuarantineListHandler nodeQuarantineListHandler =
+                new NodeQuarantineListHandler(
+                        leaderRetriever,
+                        timeout,
+                        responseHeaders,
+                        NodeQuarantineListHeaders.getInstance());
+
         final JobClientHeartbeatHandler jobClientHeartbeatHandler =
                 new JobClientHeartbeatHandler(
                         leaderRetriever,
@@ -971,6 +995,16 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
                 Tuple2.of(YarnStopJobTerminationHeaders.getInstance(), jobStopTerminationHandler));
 
         handlers.add(Tuple2.of(shutdownHandler.getMessageHeaders(), shutdownHandler));
+
+        handlers.add(
+                Tuple2.of(
+                        nodeQuarantineHandler.getMessageHeaders(), nodeQuarantineHandler));
+        handlers.add(
+                Tuple2.of(
+                        nodeUnquarantineHandler.getMessageHeaders(), nodeUnquarantineHandler));
+        handlers.add(
+                Tuple2.of(
+                        nodeQuarantineListHandler.getMessageHeaders(), nodeQuarantineListHandler));
 
         handlers.add(
                 Tuple2.of(

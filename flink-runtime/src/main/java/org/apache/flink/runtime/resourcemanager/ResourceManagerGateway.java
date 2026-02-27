@@ -299,4 +299,40 @@ public interface ResourceManagerGateway
             int duration,
             ProfilingInfo.ProfilingMode mode,
             @RpcTimeout Duration timeout);
+
+    /**
+     * Quarantine a node with the given resource ID.
+     *
+     * @param resourceId the resource ID of the node to quarantine
+     * @param hostname the hostname of the node
+     * @param reason the reason for quarantining the node
+     * @param duration the duration of the quarantine
+     * @param timeout timeout of the asynchronous operation
+     * @return Future which is completed when the node is quarantined
+     */
+    CompletableFuture<Acknowledge> quarantineNode(
+            ResourceID resourceId,
+            String hostname,
+            String reason,
+            Duration duration,
+            @RpcTimeout Duration timeout);
+
+    /**
+     * Remove a node from quarantine.
+     *
+     * @param resourceId the resource ID of the node to remove from quarantine
+     * @param timeout timeout of the asynchronous operation
+     * @return Future which is completed when the node is removed from quarantine
+     */
+    CompletableFuture<Acknowledge> removeNodeQuarantine(
+            ResourceID resourceId, @RpcTimeout Duration timeout);
+
+    /**
+     * List all quarantined nodes.
+     *
+     * @param timeout timeout of the asynchronous operation
+     * @return Future containing a collection of quarantined node information
+     */
+    CompletableFuture<Collection<org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus>>
+            listQuarantinedNodes(@RpcTimeout Duration timeout);
 }
