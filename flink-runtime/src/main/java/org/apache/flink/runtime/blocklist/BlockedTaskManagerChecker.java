@@ -1,12 +1,13 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,14 +20,20 @@ package org.apache.flink.runtime.blocklist;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 
-/** This checker helps to query whether a given task manager is blocked. */
+/**
+ * Checker for blocked task managers.
+ *
+ * <p>This interface provides a way to check if a task manager is blocked from receiving slot
+ * allocations. A task manager can be blocked due to various reasons such as being quarantined,
+ * having too many failures, or other health-related issues.
+ */
 public interface BlockedTaskManagerChecker {
 
     /**
-     * Returns whether the given task manager is located on a blocked node.
+     * Check if a task manager is blocked.
      *
-     * @param resourceID ID of the task manager to query
-     * @return True if the given task manager is located on a blocked node, otherwise false.
+     * @param resourceID the resource ID of the task manager to check
+     * @return true if the task manager is blocked, false otherwise
      */
     boolean isBlockedTaskManager(ResourceID resourceID);
 }
