@@ -24,8 +24,12 @@ import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.io.network.partition.ResourceManagerPartitionTrackerFactory;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.metrics.groups.ResourceManagerMetricGroup;
 import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerException;
+import org.apache.flink.runtime.resourcemanager.health.DefaultNodeHealthManager;
+import org.apache.flink.runtime.resourcemanager.health.NodeHealthManager;
+import org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus;
 import org.apache.flink.runtime.resourcemanager.slotmanager.NonSupportedResourceAllocatorImpl;
 import org.apache.flink.runtime.resourcemanager.slotmanager.ResourceAllocator;
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
@@ -37,6 +41,8 @@ import org.apache.flink.util.Preconditions;
 import javax.annotation.Nullable;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -53,6 +59,9 @@ public class StandaloneResourceManager extends ResourceManager<ResourceID> {
 
     /** The duration of the startup period. A duration of zero means there is no startup period. */
     private final Duration startupPeriodTime;
+
+    /** Manages node health status and quarantine information. */
+    private final NodeHealthManager nodeHealthManager;
 
     public StandaloneResourceManager(
             RpcService rpcService,
@@ -86,6 +95,7 @@ public class StandaloneResourceManager extends ResourceManager<ResourceID> {
                 rpcTimeout,
                 ioExecutor);
         this.startupPeriodTime = Preconditions.checkNotNull(startupPeriodTime);
+        this.nodeHealthManager = new DefaultNodeHealthManager();
     }
 
     @Override
@@ -128,5 +138,25 @@ public class StandaloneResourceManager extends ResourceManager<ResourceID> {
     @Override
     protected ResourceAllocator getResourceAllocator() {
         return NonSupportedResourceAllocatorImpl.INSTANCE;
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> quarantineNode(
+            ResourceID resourceID, String reason, Duration duration, Duration timeout) {
+        nodeHealthManager.markQuarantined(
+                resourceID, resourceID.getResourceIdString(), reason, duration);
+        return CompletableFuture.completedFuture(Acknowledge.get());
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> removeQuarantine(
+            ResourceID resourceID, Duration timeout) {
+        nodeHealthManager.removeQuarantine(resourceID);
+        return CompletableFuture.completedFuture(Acknowledge.get());
+    }
+
+    @Override
+    public CompletableFuture<Collection<NodeHealthStatus>> listQuarantinedNodes(Duration timeout) {
+        return CompletableFuture.completedFuture(new ArrayList<>(nodeHealthManager.listAll()));
     }
 }

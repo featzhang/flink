@@ -31,6 +31,7 @@ import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.instance.InstanceID;
 import org.apache.flink.runtime.io.network.partition.ResourceManagerPartitionTrackerFactory;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.metrics.MetricNames;
 import org.apache.flink.runtime.metrics.ThresholdMeter;
 import org.apache.flink.runtime.metrics.groups.ResourceManagerMetricGroup;
@@ -52,6 +53,7 @@ import org.apache.flink.util.concurrent.ScheduledExecutor;
 import javax.annotation.Nullable;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -719,5 +721,34 @@ public class ActiveResourceManager<WorkerType extends ResourceIDRetrievable>
     @VisibleForTesting
     <T> CompletableFuture<T> runInMainThread(Callable<T> callable, Duration timeout) {
         return callAsync(callable, timeout);
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> quarantineNode(
+            ResourceID resourceID, String reason, Duration duration, Duration timeout) {
+        // ActiveResourceManager does not have a node health manager
+        // This feature is only supported in StandaloneResourceManager
+        return FutureUtils.completedExceptionally(
+                new UnsupportedOperationException(
+                        "Node quarantine is not supported in ActiveResourceManager"));
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> removeQuarantine(
+            ResourceID resourceID, Duration timeout) {
+        // ActiveResourceManager does not have a node health manager
+        // This feature is only supported in StandaloneResourceManager
+        return FutureUtils.completedExceptionally(
+                new UnsupportedOperationException(
+                        "Node quarantine is not supported in ActiveResourceManager"));
+    }
+
+    @Override
+    public CompletableFuture<
+                    Collection<org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus>>
+            listQuarantinedNodes(Duration timeout) {
+        // ActiveResourceManager does not have a node health manager
+        // Return empty collection as this feature is only supported in StandaloneResourceManager
+        return CompletableFuture.completedFuture(new ArrayList<>());
     }
 }

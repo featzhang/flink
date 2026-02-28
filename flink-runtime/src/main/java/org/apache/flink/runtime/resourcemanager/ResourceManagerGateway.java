@@ -35,6 +35,7 @@ import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.metrics.dump.MetricQueryService;
 import org.apache.flink.runtime.registration.RegistrationResponse;
+import org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus;
 import org.apache.flink.runtime.rest.messages.LogInfo;
 import org.apache.flink.runtime.rest.messages.ProfilingInfo;
 import org.apache.flink.runtime.rest.messages.ProfilingInfo.ProfilingMode;
@@ -299,4 +300,33 @@ public interface ResourceManagerGateway
             int duration,
             ProfilingInfo.ProfilingMode mode,
             @RpcTimeout Duration timeout);
+
+    /**
+     * Quarantine a node for a specified duration.
+     *
+     * @param resourceID The resource ID of the node to quarantine
+     * @param reason The reason for quarantining the node
+     * @param duration The duration of the quarantine
+     * @param timeout The timeout for the operation
+     * @return A future that completes when the node is quarantined
+     */
+    CompletableFuture<Acknowledge> quarantineNode(
+            ResourceID resourceID, String reason, Duration duration, Duration timeout);
+
+    /**
+     * Remove quarantine from a node.
+     *
+     * @param resourceID The resource ID of the node to remove quarantine from
+     * @param timeout The timeout for the operation
+     * @return A future that completes when the quarantine is removed
+     */
+    CompletableFuture<Acknowledge> removeQuarantine(ResourceID resourceID, Duration timeout);
+
+    /**
+     * List all quarantined nodes.
+     *
+     * @param timeout The timeout for the operation
+     * @return A future that completes with the list of quarantined nodes
+     */
+    CompletableFuture<Collection<NodeHealthStatus>> listQuarantinedNodes(Duration timeout);
 }

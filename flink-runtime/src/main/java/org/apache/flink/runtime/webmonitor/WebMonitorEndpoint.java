@@ -49,6 +49,9 @@ import org.apache.flink.runtime.rest.handler.cluster.JobManagerProfilingFileHand
 import org.apache.flink.runtime.rest.handler.cluster.JobManagerProfilingHandler;
 import org.apache.flink.runtime.rest.handler.cluster.JobManagerProfilingListHandler;
 import org.apache.flink.runtime.rest.handler.cluster.JobManagerThreadDumpHandler;
+import org.apache.flink.runtime.rest.handler.cluster.NodeQuarantineHandler;
+import org.apache.flink.runtime.rest.handler.cluster.NodeQuarantineListHandler;
+import org.apache.flink.runtime.rest.handler.cluster.NodeQuarantineRemoveHandler;
 import org.apache.flink.runtime.rest.handler.cluster.ShutdownHandler;
 import org.apache.flink.runtime.rest.handler.dataset.ClusterDataSetDeleteHandlers;
 import org.apache.flink.runtime.rest.handler.dataset.ClusterDataSetListHandler;
@@ -151,6 +154,9 @@ import org.apache.flink.runtime.rest.messages.cluster.JobManagerProfilingHeaders
 import org.apache.flink.runtime.rest.messages.cluster.JobManagerProfilingListHeaders;
 import org.apache.flink.runtime.rest.messages.cluster.JobManagerStdoutFileHeader;
 import org.apache.flink.runtime.rest.messages.cluster.JobManagerThreadDumpHeaders;
+import org.apache.flink.runtime.rest.messages.cluster.NodeQuarantineHeaders;
+import org.apache.flink.runtime.rest.messages.cluster.NodeQuarantineListHeaders;
+import org.apache.flink.runtime.rest.messages.cluster.NodeQuarantineRemoveHeaders;
 import org.apache.flink.runtime.rest.messages.cluster.ShutdownHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobDetailsHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobManagerJobConfigurationHeaders;
@@ -321,6 +327,30 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
                         timeout,
                         responseHeaders,
                         ClusterOverviewHeaders.getInstance());
+
+        NodeQuarantineHandler nodeQuarantineHandler =
+                new NodeQuarantineHandler(
+                        leaderRetriever,
+                        timeout,
+                        responseHeaders,
+                        NodeQuarantineHeaders.getInstance(),
+                        resourceManagerRetriever);
+
+        NodeQuarantineListHandler nodeQuarantineListHandler =
+                new NodeQuarantineListHandler(
+                        leaderRetriever,
+                        timeout,
+                        responseHeaders,
+                        NodeQuarantineListHeaders.getInstance(),
+                        resourceManagerRetriever);
+
+        NodeQuarantineRemoveHandler nodeQuarantineRemoveHandler =
+                new NodeQuarantineRemoveHandler(
+                        leaderRetriever,
+                        timeout,
+                        responseHeaders,
+                        NodeQuarantineRemoveHeaders.getInstance(),
+                        resourceManagerRetriever);
 
         DashboardConfigHandler dashboardConfigHandler =
                 new DashboardConfigHandler(
@@ -779,18 +809,14 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
         }
 
         handlers.add(Tuple2.of(clusterOverviewHandler.getMessageHeaders(), clusterOverviewHandler));
+        handlers.add(Tuple2.of(nodeQuarantineHandler.getMessageHeaders(), nodeQuarantineHandler));
         handlers.add(
                 Tuple2.of(
-                        clusterConfigurationHandler.getMessageHeaders(),
-                        clusterConfigurationHandler));
+                        nodeQuarantineListHandler.getMessageHeaders(), nodeQuarantineListHandler));
         handlers.add(
                 Tuple2.of(
-                        jobManagerEnvironmentHandler.getMessageHeaders(),
-                        jobManagerEnvironmentHandler));
-        handlers.add(
-                Tuple2.of(
-                        jobManagerJobEnvironmentHandler.getMessageHeaders(),
-                        jobManagerJobEnvironmentHandler));
+                        nodeQuarantineRemoveHandler.getMessageHeaders(),
+                        nodeQuarantineRemoveHandler));
         handlers.add(Tuple2.of(dashboardConfigHandler.getMessageHeaders(), dashboardConfigHandler));
         handlers.add(Tuple2.of(jobIdsHandler.getMessageHeaders(), jobIdsHandler));
         handlers.add(Tuple2.of(jobStatusHandler.getMessageHeaders(), jobStatusHandler));
