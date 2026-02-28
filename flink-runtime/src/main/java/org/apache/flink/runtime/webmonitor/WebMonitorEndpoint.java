@@ -1029,7 +1029,8 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
                         leaderRetriever,
                         timeout,
                         BlocklistAddHeaders.getInstance(),
-                        resourceManagerRetriever);
+                        resourceManagerRetriever,
+                        clusterConfiguration);
 
         BlocklistRemoveHandler blocklistRemoveHandler =
                 new BlocklistRemoveHandler(
