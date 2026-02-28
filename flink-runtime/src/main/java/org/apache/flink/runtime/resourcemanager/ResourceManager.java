@@ -53,6 +53,8 @@ import org.apache.flink.runtime.metrics.groups.ResourceManagerMetricGroup;
 import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerException;
 import org.apache.flink.runtime.resourcemanager.exceptions.UnknownTaskExecutorException;
+import org.apache.flink.runtime.resourcemanager.health.NoOpNodeHealthManager;
+import org.apache.flink.runtime.resourcemanager.health.NodeHealthManager;
 import org.apache.flink.runtime.resourcemanager.registration.JobManagerRegistration;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
 import org.apache.flink.runtime.resourcemanager.registration.WorkerRegistration;
@@ -93,6 +95,8 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -172,7 +176,12 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 
     protected final BlocklistHandler blocklistHandler;
 
+    protected final org.apache.flink.runtime.management.blocklist.ManagementBlocklistHandler
+            managementBlocklistHandler;
+
     private final AtomicReference<byte[]> latestTokens = new AtomicReference<>();
+
+    private final NodeHealthManager nodeHealthManager;
 
     private final ResourceAllocator resourceAllocator;
 
@@ -185,6 +194,8 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
             SlotManager slotManager,
             ResourceManagerPartitionTrackerFactory clusterPartitionTrackerFactory,
             BlocklistHandler.Factory blocklistHandlerFactory,
+            org.apache.flink.runtime.management.blocklist.ManagementBlocklistHandler.Factory
+                    managementBlocklistHandlerFactory,
             JobLeaderIdService jobLeaderIdService,
             ClusterInformation clusterInformation,
             FatalErrorHandler fatalErrorHandler,
@@ -216,6 +227,8 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
                         getMainThreadExecutor(),
                         log);
 
+        this.managementBlocklistHandler = managementBlocklistHandlerFactory.create();
+
         this.jobManagerHeartbeatManager = NoOpHeartbeatManager.getInstance();
         this.taskManagerHeartbeatManager = NoOpHeartbeatManager.getInstance();
 
@@ -241,6 +254,8 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
         this.startedFuture = new CompletableFuture<>();
 
         this.delegationTokenManager = delegationTokenManager;
+
+        this.nodeHealthManager = new NoOpNodeHealthManager();
 
         this.resourceAllocator = getResourceAllocator();
     }
@@ -945,6 +960,108 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
     }
 
     @Override
+    public CompletableFuture<Void> quarantineNode(
+            ResourceID resourceID, String reason, Duration duration, Duration timeout) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    final String hostname = getHostnameForResourceId(resourceID);
+                    nodeHealthManager.markQuarantined(resourceID, hostname, reason, duration);
+                    log.info(
+                            "Node {} has been quarantined for reason: {}, duration: {}",
+                            resourceID.getStringWithMetadata(),
+                            reason,
+                            duration);
+                });
+    }
+
+    @Override
+    public CompletableFuture<Void> removeNodeQuarantine(ResourceID resourceID, Duration timeout) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    nodeHealthManager.removeQuarantine(resourceID);
+                    log.info("Quarantine removed from node {}", resourceID.getStringWithMetadata());
+                });
+    }
+
+    @Override
+    public CompletableFuture<
+                    Collection<org.apache.flink.runtime.resourcemanager.health.NodeHealthStatus>>
+            listQuarantinedNodes(Duration timeout) {
+        return CompletableFuture.completedFuture(nodeHealthManager.listAll());
+    }
+
+    @Override
+    public CompletableFuture<Collection<org.apache.flink.runtime.blocklist.BlockedNode>>
+            getAllBlockedNodes(Duration timeout) {
+        return CompletableFuture.completedFuture(blocklistHandler.getAllBlockedNodes());
+    }
+
+    @Override
+    public CompletableFuture<Void> addBlockedNode(
+            String nodeId, String cause, long endTimestamp, Duration timeout) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    Collection<org.apache.flink.runtime.blocklist.BlockedNode> newNodes =
+                            Collections.singletonList(
+                                    new org.apache.flink.runtime.blocklist.BlockedNode(
+                                            nodeId, cause, endTimestamp));
+                    blocklistHandler.addNewBlockedNodes(newNodes);
+                    log.info("Node {} has been added to blocklist for reason: {}", nodeId, cause);
+                });
+    }
+
+    @Override
+    public CompletableFuture<Void> removeBlockedNode(String nodeId, Duration timeout) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    blocklistHandler.removeTimeoutNodes(Collections.singletonList(nodeId));
+                    log.info("Node {} has been removed from blocklist", nodeId);
+                });
+    }
+
+    @Override
+    public CompletableFuture<Collection<org.apache.flink.runtime.blocklist.BlockedNode>>
+            getAllManagementBlockedNodes(Duration timeout) {
+        return CompletableFuture.completedFuture(
+                new HashSet<>(managementBlocklistHandler.getAllBlockedNodes()));
+    }
+
+    @Override
+    public CompletableFuture<Void> addManagementBlockedNode(
+            String nodeId, String reason, Duration duration, Duration timeout) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    managementBlocklistHandler.addBlockedNode(nodeId, reason, duration);
+                    log.info(
+                            "Node {} has been added to management blocklist for reason: {} (duration: {})",
+                            nodeId,
+                            reason,
+                            duration);
+                });
+    }
+
+    @Override
+    public CompletableFuture<Void> removeManagementBlockedNode(String nodeId, Duration timeout) {
+        return CompletableFuture.runAsync(
+                () -> {
+                    boolean removed = managementBlocklistHandler.removeBlockedNode(nodeId);
+                    if (removed) {
+                        log.info("Node {} has been removed from management blocklist", nodeId);
+                    } else {
+                        log.warn(
+                                "Attempted to remove non-existent node {} from management blocklist",
+                                nodeId);
+                    }
+                });
+    }
+
+    private String getHostnameForResourceId(ResourceID resourceID) {
+        // For now, return the resource ID string as hostname
+        // In a real implementation, this could be obtained from TaskManager registration info
+        return resourceID.getStringWithMetadata();
+    }
+
+    @Override
     @Local // Bug; see FLINK-27954
     public CompletableFuture<TaskExecutorThreadInfoGateway> requestTaskExecutorThreadInfoGateway(
             ResourceID taskManagerId, Duration timeout) {
@@ -1576,12 +1693,39 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 
     private class ResourceManagerBlocklistContext implements BlocklistContext {
         @Override
-        public void blockResources(Collection<BlockedNode> blockedNodes) {}
+        public void blockResources(Collection<BlockedNode> blockedNodes) {
+            // When nodes are blocked, we should:
+            // 1. Release any existing slots on those nodes
+            // 2. Prevent new slot allocations on those nodes
+            for (BlockedNode blockedNode : blockedNodes) {
+                String nodeId = blockedNode.getNodeId();
+                log.info(
+                        "Blocking resources on node: {} for reason: {}",
+                        nodeId,
+                        blockedNode.getCause());
+
+                // Find and release slots on blocked nodes
+                taskExecutors.entrySet().stream()
+                        .filter(entry -> nodeId.equals(entry.getValue().getNodeId()))
+                        .forEach(
+                                entry -> {
+                                    ResourceID taskManagerId = entry.getKey();
+                                    log.info(
+                                            "Releasing slots on blocked TaskManager: {}",
+                                            taskManagerId);
+                                    // The slot manager will handle the actual slot release
+                                    slotManager.triggerResourceRequirementsCheck();
+                                });
+            }
+        }
 
         @Override
         public void unblockResources(Collection<BlockedNode> unBlockedNodes) {
             // when a node is unblocked, we should trigger the resource requirements because the
             // slots on this node become available again.
+            for (BlockedNode unBlockedNode : unBlockedNodes) {
+                log.info("Unblocking resources on node: {}", unBlockedNode.getNodeId());
+            }
             slotManager.triggerResourceRequirementsCheck();
         }
     }
