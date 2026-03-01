@@ -30,7 +30,7 @@ import java.util.function.Function;
 /**
  * This class is responsible for managing all {@link BlockedNode}s and performing them on resources.
  */
-public interface BlocklistHandler {
+public interface BlocklistHandler extends BlockedNodeRetriever {
 
     /**
      * Add new blocked node records. If a node (identified by node id) already exists, the newly

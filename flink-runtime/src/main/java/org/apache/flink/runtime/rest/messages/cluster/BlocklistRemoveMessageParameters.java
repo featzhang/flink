@@ -20,9 +20,10 @@ package org.apache.flink.runtime.rest.messages.cluster;
 
 import org.apache.flink.runtime.rest.messages.MessageParameters;
 import org.apache.flink.runtime.rest.messages.MessagePathParameter;
+import org.apache.flink.runtime.rest.messages.MessageQueryParameter;
 
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 
 /** Message parameters for removing a node from the blocklist. */
 public class BlocklistRemoveMessageParameters extends MessageParameters {
@@ -30,8 +31,13 @@ public class BlocklistRemoveMessageParameters extends MessageParameters {
     public final NodeIdPathParameter nodeIdPathParameter = new NodeIdPathParameter();
 
     @Override
+    public Collection<MessageQueryParameter<?>> getQueryParameters() {
+        return Collections.emptyList();
+    }
+
+    @Override
     public Collection<MessagePathParameter<?>> getPathParameters() {
-        return Arrays.asList(nodeIdPathParameter);
+        return Collections.singletonList(nodeIdPathParameter);
     }
 
     /** Path parameter for the node ID. */
