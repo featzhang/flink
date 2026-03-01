@@ -24,6 +24,7 @@ import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.io.network.partition.NoOpResourceManagerPartitionTracker;
+import org.apache.flink.runtime.management.blocklist.NoOpManagementBlocklistHandler;
 import org.apache.flink.runtime.metrics.groups.ResourceManagerMetricGroup;
 import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
@@ -146,6 +147,7 @@ class StandaloneResourceManagerTest {
                     slotManager,
                     NoOpResourceManagerPartitionTracker::get,
                     new NoOpBlocklistHandler.Factory(),
+                    new NoOpManagementBlocklistHandler.Factory(),
                     jobLeaderIdService,
                     clusterInformation,
                     fatalErrorHandler,

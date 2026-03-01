@@ -28,6 +28,7 @@ import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.io.network.partition.ResourceManagerPartitionTrackerFactory;
 import org.apache.flink.runtime.io.network.partition.ResourceManagerPartitionTrackerImpl;
+import org.apache.flink.runtime.management.blocklist.NoOpManagementBlocklistHandler;
 import org.apache.flink.runtime.metrics.groups.ResourceManagerMetricGroup;
 import org.apache.flink.runtime.resourcemanager.slotmanager.NonSupportedResourceAllocatorImpl;
 import org.apache.flink.runtime.resourcemanager.slotmanager.ResourceAllocator;
@@ -97,6 +98,7 @@ public class TestingResourceManagerFactory extends ResourceManagerFactory<Resour
                 resourceManagerRuntimeServices.getSlotManager(),
                 ResourceManagerPartitionTrackerImpl::new,
                 BlocklistUtils.loadBlocklistHandlerFactory(configuration),
+                new NoOpManagementBlocklistHandler.Factory(),
                 resourceManagerRuntimeServices.getJobLeaderIdService(),
                 clusterInformation,
                 fatalErrorHandler,
@@ -180,6 +182,8 @@ public class TestingResourceManagerFactory extends ResourceManagerFactory<Resour
                 SlotManager slotManager,
                 ResourceManagerPartitionTrackerFactory clusterPartitionTrackerFactory,
                 BlocklistHandler.Factory blocklistHandlerFactory,
+                org.apache.flink.runtime.management.blocklist.ManagementBlocklistHandler.Factory
+                        managementBlocklistHandlerFactory,
                 JobLeaderIdService jobLeaderIdService,
                 ClusterInformation clusterInformation,
                 FatalErrorHandler fatalErrorHandler,
@@ -195,6 +199,7 @@ public class TestingResourceManagerFactory extends ResourceManagerFactory<Resour
                     slotManager,
                     clusterPartitionTrackerFactory,
                     blocklistHandlerFactory,
+                    managementBlocklistHandlerFactory,
                     jobLeaderIdService,
                     clusterInformation,
                     fatalErrorHandler,

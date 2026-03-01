@@ -40,6 +40,7 @@ import org.apache.flink.runtime.jobmaster.utils.TestingJobMasterGatewayBuilder;
 import org.apache.flink.runtime.leaderelection.StandaloneLeaderElection;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
 import org.apache.flink.runtime.leaderretrieval.SettableLeaderRetrievalService;
+import org.apache.flink.runtime.management.blocklist.NoOpManagementBlocklistHandler;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.registration.RegistrationResponse;
@@ -986,6 +987,7 @@ class ResourceManagerTest {
                             slotManager,
                             NoOpResourceManagerPartitionTracker::get,
                             blocklistHandlerFactory,
+                            new NoOpManagementBlocklistHandler.Factory(),
                             jobLeaderIdService,
                             testingFatalErrorHandler,
                             UnregisteredMetricGroups.createUnregisteredResourceManagerMetricGroup(),

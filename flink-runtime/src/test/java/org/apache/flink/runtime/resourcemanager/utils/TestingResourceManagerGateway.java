@@ -629,4 +629,21 @@ public class TestingResourceManagerGateway implements ResourceManagerGateway {
         removeManagementBlockedNodeFunction.apply(nodeId);
         return CompletableFuture.completedFuture(null);
     }
+
+    @Override
+    public CompletableFuture<Collection<org.apache.flink.runtime.blocklist.BlockedNode>>
+            getAllBlockedNodes(Duration timeout) {
+        return CompletableFuture.completedFuture(java.util.Collections.emptyList());
+    }
+
+    @Override
+    public CompletableFuture<Void> addBlockedNode(
+            String nodeId, String cause, long endTimestamp, Duration timeout) {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> removeBlockedNode(String nodeId, Duration timeout) {
+        return CompletableFuture.completedFuture(null);
+    }
 }

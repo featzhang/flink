@@ -59,6 +59,8 @@ public class TestingResourceManager extends ResourceManager<ResourceID> {
             SlotManager slotManager,
             ResourceManagerPartitionTrackerFactory clusterPartitionTrackerFactory,
             BlocklistHandler.Factory blocklistHandlerFactory,
+            org.apache.flink.runtime.management.blocklist.ManagementBlocklistHandler.Factory
+                    managementBlocklistHandlerFactory,
             JobLeaderIdService jobLeaderIdService,
             FatalErrorHandler fatalErrorHandler,
             ResourceManagerMetricGroup resourceManagerMetricGroup,
@@ -73,6 +75,7 @@ public class TestingResourceManager extends ResourceManager<ResourceID> {
                 slotManager,
                 clusterPartitionTrackerFactory,
                 blocklistHandlerFactory,
+                managementBlocklistHandlerFactory,
                 jobLeaderIdService,
                 new ClusterInformation("localhost", 1234),
                 fatalErrorHandler,
