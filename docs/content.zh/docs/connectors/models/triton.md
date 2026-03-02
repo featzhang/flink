@@ -24,7 +24,7 @@ under the License.
 
 # Triton
 
-## 概述
+## 概述 {#overview}
 
 Triton 模型函数允许 Flink SQL 调用 [NVIDIA Triton 推理服务器](https://github.com/triton-inference-server/server)进行实时模型推理任务。Triton 推理服务器是一个高性能推理服务解决方案，支持多种机器学习框架，包括 TensorFlow、PyTorch、ONNX、TensorRT 等。
 
@@ -37,10 +37,10 @@ Triton 模型函数允许 Flink SQL 调用 [NVIDIA Triton 推理服务器](https
 * **容错能力**：内置重试机制，可配置重试次数
 
 {{< hint info >}}
-`flink-model-triton` 模块自 Flink 2.0 起可用。请确保您可以访问正在运行的 Triton 推理服务器实例。
+`flink-model-triton` 模块自 Flink 2.0 起可用。请确保你可以访问正在运行的 Triton 推理服务器实例。
 {{< /hint >}}
 
-## 使用示例
+## 使用示例 {#usage-examples}
 
 ### 示例 1：文本分类（基础）
 
@@ -496,17 +496,17 @@ WITH (
 );
 ```
 
-## 模型选项
+## 模型选项 {#model-options}
 
-### 必需选项
+### 必需选项 {#required-options}
 
 {{< generated/triton_common_section >}}
 
-### 可选选项
+### 可选选项 {#optional-options}
 
 {{< generated/triton_advanced_section >}}
 
-## Schema 要求
+## Schema 要求 {#schema-requirement}
 
 <table class="table table-bordered">
     <thead>
@@ -547,26 +547,26 @@ WITH (
 curl http://triton-server:8000/v2/models/{model_name}/config
 ```
 
-## Triton 服务器设置
+## Triton 服务器设置 {#triton-server-setup}
 
-要使用此集成，您需要一个正在运行的 Triton 推理服务器。以下是基本设置指南：
+要使用此集成，你需要一个正在运行的 Triton 推理服务器。以下是基本设置指南：
 
-### 使用 Docker
+### 使用 Docker {#using-docker}
 
 ```bash
 # 拉取 Triton 服务器镜像
 docker pull nvcr.io/nvidia/tritonserver:23.10-py3
 
-# 使用您的模型存储库运行 Triton 服务器
+# 使用你的模型存储库运行 Triton 服务器
 docker run --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 \
   -v /path/to/your/model/repository:/models \
   nvcr.io/nvidia/tritonserver:23.10-py3 \
   tritonserver --model-repository=/models
 ```
 
-### 模型存储库结构
+### 模型存储库结构 {#model-repository-structure}
 
-您的模型存储库应遵循以下结构：
+你的模型存储库应遵循以下结构：
 
 ```
 model_repository/
@@ -580,7 +580,7 @@ model_repository/
         └── model.savedmodel/
 ```
 
-### 示例模型配置
+### 示例模型配置 {#example-model-configuration}
 
 以下是文本分类模型的 `config.pbtxt` 示例：
 
@@ -604,7 +604,7 @@ output [
 ]
 ```
 
-## 性能注意事项
+## 性能注意事项 {#performance-considerations}
 
 1. **连接池**：HTTP 客户端被池化和重用以提高效率
 2. **异步处理**：非阻塞请求防止线程饥饿
@@ -621,16 +621,16 @@ output [
 7. **压缩**：对于 > 1KB 的负载启用 gzip 压缩
 8. **并行度**：将 Flink 并行度与 Triton 服务器容量匹配
 
-## 最佳实践
+## 最佳实践 {#best-practices}
 
-### 模型版本管理
+### 模型版本管理 {#model-version-management}
 
 在生产环境中固定模型版本以确保一致性：
 ```sql
 'model-version' = '3'  -- 固定到版本 3 而不是 'latest'
 ```
 
-### 错误处理
+### 异常处理 {#error-handling-best-practices}
 
 失败时使用默认值：
 ```sql
@@ -638,7 +638,7 @@ SELECT COALESCE(output, 'UNKNOWN') AS prediction
 FROM ML_PREDICT(...)
 ```
 
-### 资源配置
+### 资源配置 {#resource-configuration}
 
 为高吞吐量场景配置足够的内存和网络缓冲区：
 ```yaml
@@ -646,16 +646,16 @@ taskmanager.memory.managed.size: 2gb
 taskmanager.network.memory.fraction: 0.2
 ```
 
-## 错误处理
+## 异常处理 {#error-handling}
 
-该集成包括全面的错误处理：
+该集成包括全面的异常处理：
 
 - **连接错误**：使用指数退避自动重试
 - **超时处理**：可配置的请求超时
 - **HTTP 错误**：来自 Triton 服务器的详细错误消息
 - **序列化错误**：JSON 解析和验证错误
 
-## 监控和调试
+## 监控和调试 {#monitoring-and-debugging}
 
 启用调试日志以监控集成：
 
@@ -671,32 +671,32 @@ logger.triton.level = DEBUG
 - 错误条件和重试
 - 性能指标
 
-## 故障排查
+## 故障排查 {#troubleshooting}
 
-### 连接问题
+### 连接问题 {#connection-issues}
 - 验证 Triton 服务器正在运行：`curl http://triton-server:8000/v2/health/ready`
 - 检查网络连接和防火墙规则
 - 确保端点 URL 包含正确的协议（http/https）
 
-### 超时错误
+### 超时错误 {#timeout-errors}
 - 增加超时值：`'timeout' = '60000'`
 - 检查 Triton 服务器资源使用情况（CPU/GPU）
 - 监控 Triton 服务器日志以查找慢速模型执行
 
-### 类型不匹配
+### 类型不匹配 {#type-mismatch}
 - 验证模型 schema：`curl http://triton-server:8000/v2/models/{model}/config`
 - 显式转换 Flink 类型：`CAST(value AS FLOAT)`
 - 确保数组维度与模型期望匹配
 
-### 高延迟
+### 高延迟 {#high-latency}
 - 启用请求压缩：`'compression' = 'gzip'`
 - 增加 Triton 服务器实例
 - 在 Triton 服务器配置中使用动态批处理
 - 检查 Flink 和 Triton 之间的网络延迟
 
-## 依赖项
+## 依赖项 {#dependencies}
 
-要使用 Triton 模型函数，您需要在 Flink 应用程序中包含以下依赖项：
+要使用 Triton 模型函数，你需要在 Flink 应用程序中包含以下依赖项：
 
 ```xml
 <dependency>
@@ -706,7 +706,7 @@ logger.triton.level = DEBUG
 </dependency>
 ```
 
-## 更多信息
+## 更多信息 {#further-information}
 
 - [Triton 推理服务器文档](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/)
 - [Triton 模型配置](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md)
