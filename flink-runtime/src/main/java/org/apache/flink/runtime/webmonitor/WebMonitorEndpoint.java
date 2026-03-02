@@ -1021,6 +1021,7 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
                 new BlocklistListHandler(
                         leaderRetriever,
                         timeout,
+                        responseHeaders,
                         BlocklistListHeaders.getInstance(),
                         resourceManagerRetriever);
 
@@ -1028,6 +1029,7 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
                 new BlocklistAddHandler(
                         leaderRetriever,
                         timeout,
+                        responseHeaders,
                         BlocklistAddHeaders.getInstance(),
                         resourceManagerRetriever,
                         clusterConfiguration);
@@ -1036,6 +1038,7 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
                 new BlocklistRemoveHandler(
                         leaderRetriever,
                         timeout,
+                        responseHeaders,
                         BlocklistRemoveHeaders.getInstance(),
                         resourceManagerRetriever);
 
