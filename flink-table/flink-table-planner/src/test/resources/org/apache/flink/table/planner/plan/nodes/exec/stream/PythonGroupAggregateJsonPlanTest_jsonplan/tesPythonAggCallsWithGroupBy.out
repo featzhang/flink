@@ -1,7 +1,7 @@
 {
   "flinkVersion" : "",
   "nodes" : [ {
-    "id" : 1,
+    "id" : 0,
     "type" : "stream-exec-table-source-scan_2",
     "scanTableSource" : {
       "table" : {
@@ -39,9 +39,9 @@
       } ]
     },
     "outputType" : "ROW<`b` INT NOT NULL, `a` INT NOT NULL, `c` INT NOT NULL>",
-    "description" : "TableSourceScan(table=[[default_catalog, default_database, MyTable, project=[b, a, c], metadata=[]]], fields=[b, a, c])"
+    "description" : "TableSourceScan(table=[[default_catalog, default_database, MyTable, project=[b, a, c], metadata=[]]], fields=[b, a, c], changelogMode=[I])"
   }, {
-    "id" : 2,
+    "id" : 0,
     "type" : "stream-exec-calc_1",
     "projection" : [ {
       "kind" : "INPUT_REF",
@@ -79,9 +79,9 @@
       "priority" : 0
     } ],
     "outputType" : "ROW<`b` INT NOT NULL, `a` INT NOT NULL, `c` INT NOT NULL, `$f3` BOOLEAN NOT NULL>",
-    "description" : "Calc(select=[b, a, c, (b > 1) AS $f3])"
+    "description" : "Calc(select=[b, a, c, (b > 1) AS $f3], changelogMode=[I])"
   }, {
-    "id" : 3,
+    "id" : 0,
     "type" : "stream-exec-exchange_1",
     "inputProperties" : [ {
       "requiredDistribution" : {
@@ -92,9 +92,9 @@
       "priority" : 0
     } ],
     "outputType" : "ROW<`b` INT NOT NULL, `a` INT NOT NULL, `c` INT NOT NULL, `$f3` BOOLEAN NOT NULL>",
-    "description" : "Exchange(distribution=[hash[b]])"
+    "description" : "Exchange(distribution=[hash[b]], changelogMode=[I])"
   }, {
-    "id" : 4,
+    "id" : 0,
     "type" : "stream-exec-python-group-aggregate_1",
     "grouping" : [ 0 ],
     "aggCalls" : [ {
@@ -118,9 +118,9 @@
       "priority" : 0
     } ],
     "outputType" : "ROW<`b` INT NOT NULL, `EXPR$1` BIGINT>",
-    "description" : "PythonGroupAggregate(groupBy=[b], select=[b, pyFunc(a, c) FILTER $f3 AS EXPR$1])"
+    "description" : "PythonGroupAggregate(groupBy=[b], select=[b, pyFunc(a, c) FILTER $f3 AS EXPR$1], changelogMode=[I,UB,UA])"
   }, {
-    "id" : 5,
+    "id" : 0,
     "type" : "stream-exec-calc_1",
     "projection" : [ {
       "kind" : "CALL",
@@ -146,9 +146,9 @@
       "priority" : 0
     } ],
     "outputType" : "ROW<`a` BIGINT, `b` BIGINT>",
-    "description" : "Calc(select=[CAST(b AS BIGINT) AS a, EXPR$1 AS b])"
+    "description" : "Calc(select=[CAST(b AS BIGINT) AS a, EXPR$1 AS b], changelogMode=[I,UB,UA])"
   }, {
-    "id" : 6,
+    "id" : 0,
     "type" : "stream-exec-sink_2",
     "configuration" : {
       "table.exec.sink.keyed-shuffle" : "AUTO",
@@ -190,36 +190,36 @@
     "description" : "Sink(table=[default_catalog.default_database.MySink], fields=[a, b])"
   } ],
   "edges" : [ {
-    "source" : 1,
-    "target" : 2,
+    "source" : 0,
+    "target" : 0,
     "shuffle" : {
       "type" : "FORWARD"
     },
     "shuffleMode" : "PIPELINED"
   }, {
-    "source" : 2,
-    "target" : 3,
+    "source" : 0,
+    "target" : 0,
     "shuffle" : {
       "type" : "FORWARD"
     },
     "shuffleMode" : "PIPELINED"
   }, {
-    "source" : 3,
-    "target" : 4,
+    "source" : 0,
+    "target" : 0,
     "shuffle" : {
       "type" : "FORWARD"
     },
     "shuffleMode" : "PIPELINED"
   }, {
-    "source" : 4,
-    "target" : 5,
+    "source" : 0,
+    "target" : 0,
     "shuffle" : {
       "type" : "FORWARD"
     },
     "shuffleMode" : "PIPELINED"
   }, {
-    "source" : 5,
-    "target" : 6,
+    "source" : 0,
+    "target" : 0,
     "shuffle" : {
       "type" : "FORWARD"
     },
