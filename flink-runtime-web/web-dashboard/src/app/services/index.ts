@@ -17,3 +17,4 @@
  */
 
 export * from './public-api';
+export { JobDiagnosisService, DiagnosticMessage, DiagnosisResponseBody } from './job-diagnosis.service';
