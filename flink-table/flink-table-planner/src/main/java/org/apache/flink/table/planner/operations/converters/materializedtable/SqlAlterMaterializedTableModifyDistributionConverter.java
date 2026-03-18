@@ -29,7 +29,6 @@ import org.apache.flink.table.operations.materializedtable.AlterMaterializedTabl
 import org.apache.flink.table.planner.utils.OperationConverterUtils;
 
 import java.util.List;
-import java.util.function.Function;
 
 /** A converter for {@link SqlAlterMaterializedTableModifyDistribution}. */
 public class SqlAlterMaterializedTableModifyDistributionConverter
@@ -49,17 +48,11 @@ public class SqlAlterMaterializedTableModifyDistributionConverter
                             identifier));
         }
 
-        return new AlterMaterializedTableChangeOperation(
-                identifier, gatherTableChanges(sqlModifyDistribution, context), oldTable);
-    }
-
-    @Override
-    protected Function<ResolvedCatalogMaterializedTable, List<TableChange>> gatherTableChanges(
-            SqlAlterMaterializedTableModifyDistribution sqlModifyDistribution,
-            ConvertContext context) {
-        final TableDistribution tableDistribution =
+        TableDistribution tableDistribution =
                 OperationConverterUtils.getDistributionFromSqlDistribution(
                         sqlModifyDistribution.getDistribution().get());
-        return oldTable -> List.of(TableChange.modify(tableDistribution));
+
+        return new AlterMaterializedTableChangeOperation(
+                identifier, List.of(TableChange.modify(tableDistribution)), oldTable);
     }
 }

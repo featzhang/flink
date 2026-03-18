@@ -272,15 +272,9 @@ public abstract class SingleValueAggFunction extends DeclarativeAggregateFunctio
 
         private static final long serialVersionUID = 320495723666949978L;
 
-        private final TimeType type;
-
-        public TimeSingleValueAggFunction(TimeType type) {
-            this.type = type;
-        }
-
         @Override
         public DataType getResultType() {
-            return DataTypes.TIME(type.getPrecision());
+            return DataTypes.TIME(TimeType.DEFAULT_PRECISION);
         }
     }
 

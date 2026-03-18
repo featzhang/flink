@@ -22,8 +22,6 @@ import org.apache.flink.sql.parser.error.SqlValidateException;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.FunctionDescriptor;
 import org.apache.flink.table.api.Schema;
-import org.apache.flink.table.api.Schema.UnresolvedColumn;
-import org.apache.flink.table.api.Schema.UnresolvedPhysicalColumn;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.CatalogMaterializedTable;
 import org.apache.flink.table.catalog.CatalogMaterializedTable.LogicalRefreshMode;
@@ -50,8 +48,9 @@ import org.apache.flink.table.operations.materializedtable.AlterMaterializedTabl
 import org.apache.flink.table.operations.materializedtable.AlterMaterializedTableSuspendOperation;
 import org.apache.flink.table.operations.materializedtable.CreateMaterializedTableOperation;
 import org.apache.flink.table.operations.materializedtable.DropMaterializedTableOperation;
-import org.apache.flink.table.operations.materializedtable.FullAlterMaterializedTableOperation;
 import org.apache.flink.table.planner.utils.TableFunc0;
+
+import org.apache.flink.shaded.guava33.com.google.common.collect.ImmutableMap;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -179,19 +178,6 @@ class SqlMaterializedTableNodeToOperationConverterTest
                         + "AS SELECT 1";
 
         createMaterializedTableInCatalog(sqlWithNonPersisted, "base_mtbl_with_non_persisted");
-
-        // MATERIALIZED TABLE with non persisted columns last
-        final String sqlWithNonPersistedLast =
-                "CREATE MATERIALIZED TABLE base_mtbl_with_non_persisted_last (\n"
-                        + "   a INT NOT NULL,"
-                        + "   c AS UPPER(CAST(a AS STRING))"
-                        + ")\n"
-                        + "FRESHNESS = INTERVAL '30' SECOND\n"
-                        + "REFRESH_MODE = FULL\n"
-                        + "AS SELECT 1 as a";
-
-        createMaterializedTableInCatalog(
-                sqlWithNonPersistedLast, "base_mtbl_with_non_persisted_last");
     }
 
     @Test
@@ -403,7 +389,7 @@ class SqlMaterializedTableNodeToOperationConverterTest
                         () -> {
                             AlterMaterializedTableChangeOperation operation =
                                     (AlterMaterializedTableChangeOperation) parse(spec.sql);
-                            operation.getNewTable();
+                            operation.getMaterializedTableWithAppliedChanges();
                         })
                 .as(spec.sql)
                 .isInstanceOf(spec.expectedException)
@@ -422,7 +408,8 @@ class SqlMaterializedTableNodeToOperationConverterTest
     void createAlterTableSuccessCase(TestSpec testSpec) {
         AlterMaterializedTableChangeOperation operation =
                 (AlterMaterializedTableChangeOperation) parse(testSpec.sql);
-        CatalogMaterializedTable catalogMaterializedTable = operation.getNewTable();
+        CatalogMaterializedTable catalogMaterializedTable =
+                operation.getMaterializedTableWithAppliedChanges();
         assertThat(catalogMaterializedTable.getUnresolvedSchema())
                 .hasToString(testSpec.expectedSchema);
     }
@@ -482,8 +469,7 @@ class SqlMaterializedTableNodeToOperationConverterTest
         AlterMaterializedTableRefreshOperation op =
                 (AlterMaterializedTableRefreshOperation) operation;
         assertThat(op.getTableIdentifier().toString()).isEqualTo("`builtin`.`default`.`mtbl1`");
-        assertThat(op.getPartitionSpec())
-                .containsExactly(Map.entry("ds1", "1"), Map.entry("ds2", "2"));
+        assertThat(op.getPartitionSpec()).isEqualTo(ImmutableMap.of("ds1", "1", "ds2", "2"));
     }
 
     @Test
@@ -551,7 +537,7 @@ class SqlMaterializedTableNodeToOperationConverterTest
                 (CatalogMaterializedTable)
                         catalog.getTable(
                                 new ObjectPath(catalogManager.getCurrentDatabase(), "base_mtbl"));
-        CatalogMaterializedTable newTable = op.getNewTable();
+        CatalogMaterializedTable newTable = op.getMaterializedTableWithAppliedChanges();
 
         assertThat(oldTable.getUnresolvedSchema()).isNotEqualTo(newTable.getUnresolvedSchema());
         assertThat(oldTable.getUnresolvedSchema().getPrimaryKey())
@@ -566,7 +552,7 @@ class SqlMaterializedTableNodeToOperationConverterTest
         assertThat(oldTable.getSerializedRefreshHandler())
                 .isEqualTo(newTable.getSerializedRefreshHandler());
 
-        List<UnresolvedColumn> addedColumn =
+        List<Schema.UnresolvedColumn> addedColumn =
                 newTable.getUnresolvedSchema().getColumns().stream()
                         .filter(
                                 column ->
@@ -577,8 +563,10 @@ class SqlMaterializedTableNodeToOperationConverterTest
         // added column should be a nullable column.
         assertThat(addedColumn)
                 .containsExactly(
-                        new UnresolvedPhysicalColumn("e", DataTypes.VARCHAR(Integer.MAX_VALUE)),
-                        new UnresolvedPhysicalColumn("f", DataTypes.VARCHAR(Integer.MAX_VALUE)));
+                        new Schema.UnresolvedPhysicalColumn(
+                                "e", DataTypes.VARCHAR(Integer.MAX_VALUE)),
+                        new Schema.UnresolvedPhysicalColumn(
+                                "f", DataTypes.VARCHAR(Integer.MAX_VALUE)));
     }
 
     @Test
@@ -638,6 +626,9 @@ class SqlMaterializedTableNodeToOperationConverterTest
         ResolvedCatalogMaterializedTable materializedTable = op.getCatalogMaterializedTable();
         assertThat(materializedTable).isInstanceOf(ResolvedCatalogMaterializedTable.class);
 
+        Map<String, String> options = new HashMap<>();
+        options.put("connector", "filesystem");
+        options.put("format", "json");
         final CatalogMaterializedTable expected =
                 getDefaultMaterializedTableBuilder()
                         .freshness(IntervalFreshness.ofSecond("30"))
@@ -658,16 +649,18 @@ class SqlMaterializedTableNodeToOperationConverterTest
                         + "COMMENT 'materialized table comment'\n"
                         + "PARTITIONED BY (a, d)\n"
                         + "WITH (\n"
-                        + "  'format' = 'json2'\n"
+                        + "  'connector' = 'filesystem', \n"
+                        + "  'format' = 'json'\n"
                         + ")\n"
                         + "FRESHNESS = INTERVAL '30' SECOND\n"
                         + "REFRESH_MODE = FULL\n"
                         + "AS SELECT a, b, c, d, d as e, cast('123' as string) as f FROM t3";
         Operation operation = parse(sql);
 
-        assertThat(operation).isInstanceOf(FullAlterMaterializedTableOperation.class);
+        assertThat(operation).isInstanceOf(AlterMaterializedTableAsQueryOperation.class);
 
-        FullAlterMaterializedTableOperation op = (FullAlterMaterializedTableOperation) operation;
+        AlterMaterializedTableAsQueryOperation op =
+                (AlterMaterializedTableAsQueryOperation) operation;
         assertThat(op.getTableChanges())
                 .containsExactly(
                         TableChange.add(Column.physical("e", DataTypes.VARCHAR(Integer.MAX_VALUE))),
@@ -675,27 +668,19 @@ class SqlMaterializedTableNodeToOperationConverterTest
                         TableChange.modifyDefinitionQuery(
                                 "SELECT `a`, `b`, `c`, `d`, `d` AS `e`, CAST('123' AS STRING) AS `f`\nFROM `t3`",
                                 "SELECT `t3`.`a`, `t3`.`b`, `t3`.`c`, `t3`.`d`, `t3`.`d` AS `e`, CAST('123' AS STRING) AS `f`\n"
-                                        + "FROM `builtin`.`default`.`t3` AS `t3`"),
-                        TableChange.set("format", "json2"),
-                        TableChange.reset("connector"));
+                                        + "FROM `builtin`.`default`.`t3` AS `t3`"));
         assertThat(operation.asSummaryString())
                 .isEqualTo(
-                        "CREATE OR ALTER MATERIALIZED TABLE builtin.default.base_mtbl\n"
-                                + "  ADD `e` STRING ,\n"
-                                + "  ADD `f` STRING ,\n"
-                                + " MODIFY DEFINITION QUERY TO 'SELECT `t3`.`a`, `t3`.`b`, `t3`.`c`, `t3`.`d`, `t3`.`d` AS `e`, CAST('123' AS STRING) AS `f`\n"
-                                + "FROM `builtin`.`default`.`t3` AS `t3`',\n"
-                                + "  SET 'format' = 'json2',\n"
-                                + "  RESET 'connector'");
+                        "ALTER MATERIALIZED TABLE builtin.default.base_mtbl AS SELECT `t3`.`a`, `t3`.`b`, `t3`.`c`, `t3`.`d`, `t3`.`d` AS `e`, CAST('123' AS STRING) AS `f`\n"
+                                + "FROM `builtin`.`default`.`t3` AS `t3`");
 
         // new table only difference schema & definition query with old table.
         CatalogMaterializedTable oldTable =
                 (CatalogMaterializedTable)
                         catalog.getTable(
                                 new ObjectPath(catalogManager.getCurrentDatabase(), "base_mtbl"));
-        CatalogMaterializedTable newTable = op.getNewTable();
+        CatalogMaterializedTable newTable = op.getMaterializedTableWithAppliedChanges();
 
-        assertThat(newTable.getOptions()).containsExactly(Map.entry("format", "json2"));
         assertThat(oldTable.getUnresolvedSchema()).isNotEqualTo(newTable.getUnresolvedSchema());
         assertThat(oldTable.getUnresolvedSchema().getPrimaryKey())
                 .isEqualTo(newTable.getUnresolvedSchema().getPrimaryKey());
@@ -709,7 +694,7 @@ class SqlMaterializedTableNodeToOperationConverterTest
         assertThat(oldTable.getSerializedRefreshHandler())
                 .isEqualTo(newTable.getSerializedRefreshHandler());
 
-        List<UnresolvedColumn> addedColumn =
+        List<Schema.UnresolvedColumn> addedColumn =
                 newTable.getUnresolvedSchema().getColumns().stream()
                         .filter(
                                 column ->
@@ -720,8 +705,10 @@ class SqlMaterializedTableNodeToOperationConverterTest
         // added column should be a nullable column.
         assertThat(addedColumn)
                 .containsExactly(
-                        new UnresolvedPhysicalColumn("e", DataTypes.VARCHAR(Integer.MAX_VALUE)),
-                        new UnresolvedPhysicalColumn("f", DataTypes.VARCHAR(Integer.MAX_VALUE)));
+                        new Schema.UnresolvedPhysicalColumn(
+                                "e", DataTypes.VARCHAR(Integer.MAX_VALUE)),
+                        new Schema.UnresolvedPhysicalColumn(
+                                "f", DataTypes.VARCHAR(Integer.MAX_VALUE)));
     }
 
     private static Collection<TestSpec> testDataForCreateAlterMaterializedTableFailedCase() {
@@ -765,11 +752,6 @@ class SqlMaterializedTableNodeToOperationConverterTest
                                 + "renaming, and reordering columns are not supported.\n"
                                 + "Column mismatch at position 3: Original column is [`d` STRING], "
                                 + "but new column is [`d` STRING NOT NULL]."),
-                TestSpec.of(
-                        "ALTER MATERIALIZED TABLE base_mtbl_with_non_persisted AS SELECT '123'",
-                        "ALTER query for MATERIALIZED TABLE "
-                                + "with schema containing non persisted columns is not supported, "
-                                + "consider using CREATE OR ALTER MATERIALIZED TABLE instead"),
                 TestSpec.of(
                         "ALTER MATERIALIZED TABLE t1 AS SELECT * FROM t1",
                         "ALTER MATERIALIZED TABLE for a table is not allowed"));
@@ -1222,23 +1204,7 @@ class SqlMaterializedTableNodeToOperationConverterTest
 
         list.add(
                 TestSpec.withExpectedSchema(
-                        "CREATE OR ALTER MATERIALIZED TABLE base_mtbl_with_non_persisted_last AS SELECT 1 as a",
-                        "(\n"
-                                + "  `c` AS [UPPER(CAST(`a` AS STRING))],\n"
-                                + "  `a` INT NOT NULL\n"
-                                + ")"));
-
-        list.add(
-                TestSpec.withExpectedSchema(
-                        "CREATE OR ALTER MATERIALIZED TABLE base_mtbl_with_non_persisted_last AS SELECT 1 as a",
-                        "(\n"
-                                + "  `c` AS [UPPER(CAST(`a` AS STRING))],\n"
-                                + "  `a` INT NOT NULL\n"
-                                + ")"));
-
-        list.add(
-                TestSpec.withExpectedSchema(
-                        "CREATE OR ALTER MATERIALIZED TABLE base_mtbl_with_non_persisted AS SELECT 1",
+                        "ALTER MATERIALIZED TABLE base_mtbl_with_non_persisted AS SELECT 1",
                         "(\n"
                                 + "  `m` STRING METADATA VIRTUAL,\n"
                                 + "  `calc` AS ['a' || 'b'],\n"
@@ -1247,7 +1213,7 @@ class SqlMaterializedTableNodeToOperationConverterTest
 
         list.add(
                 TestSpec.withExpectedSchema(
-                        "CREATE OR ALTER MATERIALIZED TABLE base_mtbl_with_non_persisted AS SELECT 2, 'a' AS sec",
+                        "ALTER MATERIALIZED TABLE base_mtbl_with_non_persisted AS SELECT 2, 'a' AS sec",
                         "(\n"
                                 + "  `m` STRING METADATA VIRTUAL,\n"
                                 + "  `calc` AS ['a' || 'b'],\n"
@@ -1263,15 +1229,6 @@ class SqlMaterializedTableNodeToOperationConverterTest
                                 + "  `calc` AS ['a' || 'b'],\n"
                                 + "  `EXPR$0` INT NOT NULL,\n"
                                 + "  `sec` CHAR(1)\n"
-                                + ")"));
-
-        list.add(
-                TestSpec.withExpectedSchema(
-                        // Schema doesn't change, so should be ok
-                        "ALTER MATERIALIZED TABLE base_mtbl_with_non_persisted_last AS SELECT 123 as a",
-                        "(\n"
-                                + "  `c` AS [UPPER(CAST(`a` AS STRING))],\n"
-                                + "  `a` INT NOT NULL\n"
                                 + ")"));
         return list;
     }

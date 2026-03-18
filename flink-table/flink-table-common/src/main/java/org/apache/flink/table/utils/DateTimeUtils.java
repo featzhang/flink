@@ -1698,10 +1698,6 @@ public class DateTimeUtils {
         }
     }
 
-    public static int truncate(int time, int precision) {
-        return (int) zeroLastDigits(time, 3 - precision);
-    }
-
     private static long zeroLastDigits(long l, int n) {
         long tenToTheN = (long) Math.pow(10, n);
         return (l / tenToTheN) * tenToTheN;

@@ -355,11 +355,11 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
         return Stream.of(
                 TestSetSpec.forFunction(BuiltInFunctionDefinitions.TEMPORAL_OVERLAPS)
                         .onFieldsWithData(
-                                LocalTime.of(2, 55, 0, 123_000_000),
+                                LocalTime.of(2, 55, 0),
                                 Duration.ofHours(1),
                                 LocalTime.of(3, 30, 0),
                                 Duration.ofHours(2))
-                        .andDataTypes(TIME(3), INTERVAL(HOUR()), TIME(3), INTERVAL(HOUR()))
+                        .andDataTypes(TIME(), INTERVAL(HOUR()), TIME(), INTERVAL(HOUR()))
                         .testResult(
                                 temporalOverlaps($("f0"), $("f1"), $("f2"), $("f3")),
                                 "(f0, f1) OVERLAPS (f2, f3)",
@@ -450,16 +450,18 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
         return Stream.of(
                 TestSetSpec.forFunction(BuiltInFunctionDefinitions.FLOOR)
                         .onFieldsWithData(
-                                LocalTime.of(11, 22, 33, 123_456_789),
+                                // https://issues.apache.org/jira/browse/FLINK-17224
+                                // Fractional seconds are lost
+                                LocalTime.of(11, 22, 33),
                                 LocalDate.of(1990, 10, 14),
                                 LocalDateTime.of(2020, 2, 29, 1, 56, 59, 987654321),
                                 LocalDateTime.of(2021, 9, 24, 9, 20, 50, 924325471))
-                        .andDataTypes(TIME(3), DATE(), TIMESTAMP(), TIMESTAMP())
+                        .andDataTypes(TIME(), DATE(), TIMESTAMP(), TIMESTAMP())
                         .testResult(
                                 $("f0").ceil(TimeIntervalUnit.MILLISECOND),
                                 "CEIL(f0 TO MILLISECOND)",
-                                LocalTime.of(11, 22, 33, 123_000_000),
-                                TIME(3).nullable())
+                                LocalTime.of(11, 22, 33),
+                                TIME().nullable())
                         .testResult(
                                 $("f1").ceil(TimeIntervalUnit.MILLISECOND),
                                 "CEIL(f1 TO MILLISECOND)",
@@ -473,8 +475,8 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
                         .testResult(
                                 $("f0").ceil(TimeIntervalUnit.SECOND),
                                 "CEIL(f0 TO SECOND)",
-                                LocalTime.of(11, 22, 34),
-                                TIME(3).nullable())
+                                LocalTime.of(11, 22, 33),
+                                TIME().nullable())
                         .testResult(
                                 $("f1").ceil(TimeIntervalUnit.SECOND),
                                 "CEIL(f1 TO SECOND)",
@@ -489,7 +491,7 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
                                 $("f0").ceil(TimeIntervalUnit.MINUTE),
                                 "CEIL(f0 TO MINUTE)",
                                 LocalTime.of(11, 23),
-                                TIME(3).nullable())
+                                TIME().nullable())
                         .testResult(
                                 $("f1").ceil(TimeIntervalUnit.MINUTE),
                                 "CEIL(f1 TO MINUTE)",
@@ -504,7 +506,7 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
                                 $("f0").ceil(TimeIntervalUnit.HOUR),
                                 "CEIL(f0 TO HOUR)",
                                 LocalTime.of(12, 0),
-                                TIME(3).nullable())
+                                TIME().nullable())
                         .testResult(
                                 $("f1").ceil(TimeIntervalUnit.HOUR),
                                 "CEIL(f1 TO HOUR)",
@@ -633,15 +635,17 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
         return Stream.of(
                 TestSetSpec.forFunction(BuiltInFunctionDefinitions.FLOOR)
                         .onFieldsWithData(
-                                LocalTime.of(11, 22, 33, 123_456_789),
+                                // https://issues.apache.org/jira/browse/FLINK-17224
+                                // Fractional seconds are lost
+                                LocalTime.of(11, 22, 33),
                                 LocalDate.of(1990, 10, 14),
                                 LocalDateTime.of(2020, 2, 29, 1, 56, 59, 987654321))
-                        .andDataTypes(TIME(3), DATE(), TIMESTAMP())
+                        .andDataTypes(TIME(), DATE(), TIMESTAMP())
                         .testResult(
                                 $("f0").floor(TimeIntervalUnit.MILLISECOND),
                                 "FLOOR(f0 TO MILLISECOND)",
-                                LocalTime.of(11, 22, 33, 123_000_000),
-                                TIME(3).nullable())
+                                LocalTime.of(11, 22, 33),
+                                TIME().nullable())
                         .testResult(
                                 $("f1").floor(TimeIntervalUnit.MILLISECOND),
                                 "FLOOR(f1 TO MILLISECOND)",
@@ -656,7 +660,7 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
                                 $("f0").floor(TimeIntervalUnit.SECOND),
                                 "FLOOR(f0 TO SECOND)",
                                 LocalTime.of(11, 22, 33),
-                                TIME(3).nullable())
+                                TIME().nullable())
                         .testResult(
                                 $("f1").floor(TimeIntervalUnit.SECOND),
                                 "FLOOR(f1 TO SECOND)",
@@ -671,7 +675,7 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
                                 $("f0").floor(TimeIntervalUnit.MINUTE),
                                 "FLOOR(f0 TO MINUTE)",
                                 LocalTime.of(11, 22),
-                                TIME(3).nullable())
+                                TIME().nullable())
                         .testResult(
                                 $("f1").floor(TimeIntervalUnit.MINUTE),
                                 "FLOOR(f1 TO MINUTE)",
@@ -686,7 +690,7 @@ class TimeFunctionsITCase extends BuiltInFunctionTestBase {
                                 $("f0").floor(TimeIntervalUnit.HOUR),
                                 "FLOOR(f0 TO HOUR)",
                                 LocalTime.of(11, 0),
-                                TIME(3).nullable())
+                                TIME().nullable())
                         .testResult(
                                 $("f1").floor(TimeIntervalUnit.HOUR),
                                 "FLOOR(f1 TO HOUR)",

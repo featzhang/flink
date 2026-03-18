@@ -34,7 +34,6 @@ import org.apache.flink.table.catalog.Column.PhysicalColumn;
 import org.apache.flink.table.catalog.DataTypeFactory;
 import org.apache.flink.table.catalog.ResolvedCatalogMaterializedTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
-import org.apache.flink.table.catalog.TableChange;
 import org.apache.flink.table.operations.Operation;
 import org.apache.flink.table.operations.materializedtable.AlterMaterializedTableChangeOperation;
 import org.apache.flink.table.planner.operations.converters.SchemaAddConverter;
@@ -48,7 +47,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * Abstract class for converting {@link SqlAlterMaterializedTableSchema} and its children for alter
@@ -60,30 +58,21 @@ public abstract class SqlAlterMaterializedTableSchemaConverter<
     @Override
     protected Operation convertToOperation(
             T alterTableSchema, ResolvedCatalogMaterializedTable oldTable, ConvertContext context) {
+        MaterializedTableUtils.validatePersistedColumnsUsedByQuery(
+                oldTable, alterTableSchema, context);
+
+        SchemaConverter converter = createSchemaConverter(oldTable, context);
+        converter.updateColumn(alterTableSchema.getColumnPositions().getList());
+        alterTableSchema.getWatermark().ifPresent(converter::updateWatermark);
+        alterTableSchema.getFullConstraint().ifPresent(converter::updatePrimaryKey);
+        Schema schema = converter.convert();
+
+        validateChanges(oldTable.getResolvedSchema(), schema, context);
+
         return new AlterMaterializedTableChangeOperation(
                 resolveIdentifier(alterTableSchema, context),
-                gatherTableChanges(alterTableSchema, context),
+                converter.getChangesCollector(),
                 oldTable);
-    }
-
-    @Override
-    protected Function<ResolvedCatalogMaterializedTable, List<TableChange>> gatherTableChanges(
-            T alterTableSchema, ConvertContext context) {
-        return oldTable -> {
-            MaterializedTableUtils.validatePersistedColumnsUsedByQuery(
-                    oldTable, alterTableSchema, context);
-
-            SchemaConverter converter = createSchemaConverter(oldTable, context);
-            converter.updateColumn(alterTableSchema.getColumnPositions().getList());
-            alterTableSchema.getWatermark().ifPresent(converter::updateWatermark);
-            alterTableSchema.getFullConstraint().ifPresent(converter::updatePrimaryKey);
-            Schema schema = converter.convert();
-
-            ResolvedSchema oldSchema = oldTable.getResolvedSchema();
-            validateChanges(oldSchema, schema, context);
-
-            return converter.getChangesCollector();
-        };
     }
 
     protected abstract SchemaConverter createSchemaConverter(

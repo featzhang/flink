@@ -19,7 +19,6 @@
 package org.apache.flink.table.planner.operations.converters.materializedtable;
 
 import org.apache.flink.sql.parser.ddl.materializedtable.SqlAlterMaterializedTableAsQuery;
-import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedCatalogMaterializedTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -31,9 +30,7 @@ import org.apache.flink.table.planner.utils.MaterializedTableUtils;
 
 import org.apache.calcite.sql.SqlNode;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 
 /** A converter for {@link SqlAlterMaterializedTableAsQuery}. */
 public class SqlAlterMaterializedTableAsQueryConverter
@@ -44,42 +41,23 @@ public class SqlAlterMaterializedTableAsQueryConverter
             SqlAlterMaterializedTableAsQuery sqlAlterTableAsQuery,
             ResolvedCatalogMaterializedTable oldTable,
             ConvertContext context) {
-        final ObjectIdentifier identifier = resolveIdentifier(sqlAlterTableAsQuery, context);
-        return new AlterMaterializedTableAsQueryOperation(
-                identifier, gatherTableChanges(sqlAlterTableAsQuery, context), oldTable);
-    }
+        ObjectIdentifier identifier = resolveIdentifier(sqlAlterTableAsQuery, context);
 
-    @Override
-    protected Function<ResolvedCatalogMaterializedTable, List<TableChange>> gatherTableChanges(
-            SqlAlterMaterializedTableAsQuery sqlAlterTableAsQuery, ConvertContext context) {
-        return oldTable -> {
-            // Validate and extract schema from query
-            String originalQuery = context.toQuotedSqlString(sqlAlterTableAsQuery.getAsQuery());
-            SqlNode validatedQuery =
-                    context.getSqlValidator().validate(sqlAlterTableAsQuery.getAsQuery());
-            String definitionQuery = context.toQuotedSqlString(validatedQuery);
-            PlannerQueryOperation queryOperation =
-                    new PlannerQueryOperation(
-                            context.toRelRoot(validatedQuery).project(), () -> definitionQuery);
+        // Validate and extract schema from query
+        String originalQuery = context.toQuotedSqlString(sqlAlterTableAsQuery.getAsQuery());
+        SqlNode validatedQuery =
+                context.getSqlValidator().validate(sqlAlterTableAsQuery.getAsQuery());
+        String definitionQuery = context.toQuotedSqlString(validatedQuery);
+        PlannerQueryOperation queryOperation =
+                new PlannerQueryOperation(
+                        context.toRelRoot(validatedQuery).project(), () -> definitionQuery);
+        ResolvedSchema oldSchema = oldTable.getResolvedSchema();
+        ResolvedSchema newSchema = queryOperation.getResolvedSchema();
 
-            ResolvedSchema oldSchema = oldTable.getResolvedSchema();
-            ResolvedSchema newSchema = queryOperation.getResolvedSchema();
-            List<TableChange> tableChanges =
-                    new ArrayList<>(
-                            MaterializedTableUtils.buildSchemaTableChanges(oldSchema, newSchema));
+        List<TableChange> tableChanges =
+                MaterializedTableUtils.buildSchemaTableChanges(oldSchema, newSchema);
+        tableChanges.add(TableChange.modifyDefinitionQuery(originalQuery, definitionQuery));
 
-            if (!tableChanges.isEmpty()) {
-                final boolean hasNonPersistedColumn =
-                        oldSchema.getColumns().stream().anyMatch(c -> !c.isPersisted());
-                if (hasNonPersistedColumn) {
-                    throw new ValidationException(
-                            "ALTER query for MATERIALIZED TABLE "
-                                    + "with schema containing non persisted columns is not supported, "
-                                    + "consider using CREATE OR ALTER MATERIALIZED TABLE instead");
-                }
-            }
-            tableChanges.add(TableChange.modifyDefinitionQuery(originalQuery, definitionQuery));
-            return tableChanges;
-        };
+        return new AlterMaterializedTableAsQueryOperation(identifier, tableChanges, oldTable);
     }
 }

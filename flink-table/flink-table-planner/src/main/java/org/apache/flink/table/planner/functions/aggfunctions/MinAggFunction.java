@@ -185,15 +185,9 @@ public abstract class MinAggFunction extends DeclarativeAggregateFunction {
 
     /** Built-in Time Min aggregate function. */
     public static class TimeMinAggFunction extends MinAggFunction {
-        private final TimeType type;
-
-        public TimeMinAggFunction(TimeType type) {
-            this.type = type;
-        }
-
         @Override
         public DataType getResultType() {
-            return DataTypes.TIME(type.getPrecision());
+            return DataTypes.TIME(TimeType.DEFAULT_PRECISION);
         }
     }
 

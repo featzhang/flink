@@ -277,15 +277,7 @@ public class UnalignedCheckpointITCase extends UnalignedCheckpointTestBase {
 
     @Test
     public void execute() throws Exception {
-        // Phase 1: Run with WAIT_FOR_CHECKPOINT_AND_CANCEL to produce a checkpoint
-        settings.setCheckpointGenerationMode(
-                CheckpointGenerationMode.WAIT_FOR_CHECKPOINT_AND_CANCEL);
-        String checkpointPath = super.execute(settings);
-
-        // Phase 2: Restore from the checkpoint and run normally
-        settings.setCheckpointGenerationMode(CheckpointGenerationMode.NONE);
-        settings.setRestoreCheckpoint(checkpointPath);
-        super.execute(settings);
+        execute(settings);
     }
 
     protected void checkCounters(JobExecutionResult result) {

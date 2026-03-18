@@ -133,9 +133,7 @@ object FlinkStreamRuleSets {
           // rewrite constant table function scan to correlate
           JoinTableFunctionScanToCorrelateRule.INSTANCE,
           // Wrap arguments for JSON aggregate functions
-          WrapJsonAggFunctionArgumentsRule.INSTANCE,
-          // prune COUNT(*) input to project a constant before aggregation
-          PruneCountStarInputRule.INSTANCE
+          WrapJsonAggFunctionArgumentsRule.INSTANCE
         )
     ).asJava)
 

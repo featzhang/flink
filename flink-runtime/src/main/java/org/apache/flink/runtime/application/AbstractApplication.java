@@ -75,7 +75,7 @@ public abstract class AbstractApplication implements Serializable {
      * For example, the Dispatcher registers itself as a listener to perform operations such as
      * archiving when the application reaches a terminal state.
      */
-    private transient List<ApplicationStatusListener> statusListeners = new ArrayList<>();
+    private final transient List<ApplicationStatusListener> statusListeners = new ArrayList<>();
 
     public AbstractApplication(ApplicationID applicationId) {
         this.applicationId = checkNotNull(applicationId);
@@ -159,14 +159,7 @@ public abstract class AbstractApplication implements Serializable {
      * <p>This method is not thread-safe and should not be called concurrently.
      */
     public void registerStatusListener(ApplicationStatusListener listener) {
-        getStatusListeners().add(listener);
-    }
-
-    private List<ApplicationStatusListener> getStatusListeners() {
-        if (statusListeners == null) {
-            statusListeners = new ArrayList<>();
-        }
-        return statusListeners;
+        statusListeners.add(listener);
     }
 
     // ------------------------------------------------------------------------
@@ -235,10 +228,8 @@ public abstract class AbstractApplication implements Serializable {
                 targetState);
         this.statusTimestamps[targetState.ordinal()] = System.currentTimeMillis();
         this.applicationState = targetState;
-        getStatusListeners()
-                .forEach(
-                        listener ->
-                                listener.notifyApplicationStatusChange(applicationId, targetState));
+        statusListeners.forEach(
+                listener -> listener.notifyApplicationStatusChange(applicationId, targetState));
     }
 
     private void validateTransition(ApplicationState targetState) {

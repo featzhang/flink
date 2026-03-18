@@ -191,15 +191,9 @@ public abstract class MaxAggFunction extends DeclarativeAggregateFunction {
 
     /** Built-in Time Max aggregate function. */
     public static class TimeMaxAggFunction extends MaxAggFunction {
-        private final TimeType type;
-
-        public TimeMaxAggFunction(TimeType type) {
-            this.type = type;
-        }
-
         @Override
         public DataType getResultType() {
-            return DataTypes.TIME(type.getPrecision());
+            return DataTypes.TIME(TimeType.DEFAULT_PRECISION);
         }
     }
 

@@ -680,8 +680,7 @@ Calc(select=[b])
       +- HashAggregate(isMerge=[true], select=[Final_COUNT(count1$0) AS c])
          +- Exchange(distribution=[single])
             +- LocalHashAggregate(select=[Partial_COUNT(*) AS count1$0])
-               +- Calc(select=[0 AS $f0])
-                  +- Reused(reference_id=[1])
+               +- Reused(reference_id=[1])
 ]]>
     </Resource>
   </TestCase>
@@ -1203,8 +1202,7 @@ Calc(select=[b])
       +- HashAggregate(isMerge=[true], select=[Final_COUNT(count1$0) AS c])
          +- Exchange(distribution=[single])
             +- LocalHashAggregate(select=[Partial_COUNT(*) AS count1$0])
-               +- Calc(select=[0 AS $f0])
-                  +- Reused(reference_id=[1])
+               +- Reused(reference_id=[1])
 ]]>
     </Resource>
   </TestCase>

@@ -318,8 +318,7 @@ class AggFunctionFactory(
         case DATE =>
           new MinAggFunction.DateMinAggFunction
         case TIME_WITHOUT_TIME_ZONE =>
-          val t = argTypes(0).asInstanceOf[TimeType]
-          new MinAggFunction.TimeMinAggFunction(t)
+          new MinAggFunction.TimeMinAggFunction
         case TIMESTAMP_WITHOUT_TIME_ZONE =>
           val d = argTypes(0).asInstanceOf[TimestampType]
           new MinAggFunction.TimestampMinAggFunction(d)
@@ -378,8 +377,7 @@ class AggFunctionFactory(
       case DATE =>
         new LeadLagAggFunction.DateLeadLagAggFunction(argTypes.length)
       case TIME_WITHOUT_TIME_ZONE =>
-        val t = argTypes(0).asInstanceOf[TimeType]
-        new LeadLagAggFunction.TimeLeadLagAggFunction(t, argTypes.length)
+        new LeadLagAggFunction.TimeLeadLagAggFunction(argTypes.length)
       case TIMESTAMP_WITHOUT_TIME_ZONE =>
         val d = argTypes(0).asInstanceOf[TimestampType]
         new LeadLagAggFunction.TimestampLeadLagAggFunction(argTypes.length, d)
@@ -429,8 +427,7 @@ class AggFunctionFactory(
         case DATE =>
           new MaxAggFunction.DateMaxAggFunction
         case TIME_WITHOUT_TIME_ZONE =>
-          val t = argTypes(0).asInstanceOf[TimeType]
-          new MaxAggFunction.TimeMaxAggFunction(t)
+          new MaxAggFunction.TimeMaxAggFunction
         case TIMESTAMP_WITHOUT_TIME_ZONE =>
           val d = argTypes(0).asInstanceOf[TimestampType]
           new MaxAggFunction.TimestampMaxAggFunction(d)
@@ -523,8 +520,7 @@ class AggFunctionFactory(
       case DATE =>
         new DateSingleValueAggFunction
       case TIME_WITHOUT_TIME_ZONE =>
-        val t = argTypes(0).asInstanceOf[TimeType]
-        new TimeSingleValueAggFunction(t)
+        new TimeSingleValueAggFunction
       case TIMESTAMP_WITHOUT_TIME_ZONE =>
         val d = argTypes(0).asInstanceOf[TimestampType]
         new TimestampSingleValueAggFunction(d)

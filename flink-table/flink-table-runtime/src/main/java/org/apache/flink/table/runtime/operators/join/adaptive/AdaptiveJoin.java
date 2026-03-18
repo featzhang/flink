@@ -32,11 +32,11 @@ public interface AdaptiveJoin extends Serializable {
      * Generates a StreamOperatorFactory for this join operator using the provided ClassLoader and
      * config.
      *
-     * @param userClassLoader the user ClassLoader to be used for loading classes.
+     * @param classLoader the ClassLoader to be used for loading classes.
      * @param config the configuration to be applied for creating the operator factory.
      * @return a StreamOperatorFactory instance.
      */
-    StreamOperatorFactory<?> genOperatorFactory(ClassLoader userClassLoader, ReadableConfig config);
+    StreamOperatorFactory<?> genOperatorFactory(ClassLoader classLoader, ReadableConfig config);
 
     /**
      * Get the join type of the join operator.

@@ -125,9 +125,7 @@ object FlinkBatchRuleSets {
         // vector search rule.
         ConstantVectorSearchCallToCorrelateRule.INSTANCE,
         // Wrap arguments for JSON aggregate functions
-        WrapJsonAggFunctionArgumentsRule.INSTANCE,
-        // prune COUNT(*) input to project a constant before aggregation
-        PruneCountStarInputRule.INSTANCE
+        WrapJsonAggFunctionArgumentsRule.INSTANCE
       )).asJava)
 
   /** RuleSet about filter */

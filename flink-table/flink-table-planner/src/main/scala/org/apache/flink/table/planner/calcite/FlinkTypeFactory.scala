@@ -24,6 +24,7 @@ import org.apache.flink.table.legacy.api.TableSchema
 import org.apache.flink.table.legacy.types.logical.TypeInformationRawType
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory.toLogicalType
 import org.apache.flink.table.planner.plan.schema._
+import org.apache.flink.table.planner.utils.JavaScalaConversionUtil
 import org.apache.flink.table.planner.utils.JavaScalaConversionUtil.toScala
 import org.apache.flink.table.runtime.types.{LogicalTypeDataTypeConverter, PlannerTypeUtils}
 import org.apache.flink.table.types.logical._
@@ -86,8 +87,7 @@ class FlinkTypeFactory(
 
       // temporal types
       case LogicalTypeRoot.DATE => createSqlType(DATE)
-      case LogicalTypeRoot.TIME_WITHOUT_TIME_ZONE =>
-        createSqlType(TIME, t.asInstanceOf[TimeType].getPrecision)
+      case LogicalTypeRoot.TIME_WITHOUT_TIME_ZONE => createSqlType(TIME)
 
       // interval types
       case LogicalTypeRoot.INTERVAL_YEAR_MONTH =>
@@ -630,7 +630,11 @@ object FlinkTypeFactory {
       // temporal types
       case DATE => new DateType()
       case TIME =>
-        new TimeType(relDataType.getPrecision)
+        if (relDataType.getPrecision > 3) {
+          throw new TableException(s"TIME precision is not supported: ${relDataType.getPrecision}")
+        }
+        // the planner supports precision 3, but for consistency with old planner, we set it to 0.
+        new TimeType()
       case TIMESTAMP =>
         new TimestampType(relDataType.getPrecision)
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE =>
