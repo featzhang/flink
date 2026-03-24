@@ -17,9 +17,14 @@
   -->
 
 <flink-overview-statistic [statisticData$]="statisticData$"></flink-overview-statistic>
+<flink-topn-metrics
+  [topCpuConsumers]="topCpuConsumers"
+  [topBackpressureOperators]="topBackpressureOperators"
+  [topGcIntensiveTasks]="topGcIntensiveTasks"
+></flink-topn-metrics>
 <flink-application-list
   [applicationData$]="applicationData$"
-  [title]="'Running Application List'"
+  [title]="'Running Application List with topCpuConsumers'"
   [completed]="false"
   (navigate)="navigateToApplication(['application', 'running', $event.id])"
 ></flink-application-list>

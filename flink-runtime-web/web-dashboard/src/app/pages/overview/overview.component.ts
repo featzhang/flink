@@ -16,13 +16,20 @@
  * limitations under the License.
  */
 
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { combineLatest, Observable, Subject } from 'rxjs';
 import { map, mergeMap, share, takeUntil } from 'rxjs/operators';
 
 import { ApplicationListComponent } from '@flink-runtime-web/components/application-list/application-list.component';
-import { ApplicationItem, OverviewWithApplicationStatistics } from '@flink-runtime-web/interfaces';
+import { TopNMetricsComponent } from '@flink-runtime-web/components/topn-metrics/topn-metrics.component';
+import {
+  ApplicationItem,
+  BackpressureOperatorInfo,
+  CpuConsumerInfo,
+  GcTaskInfo,
+  OverviewWithApplicationStatistics
+} from '@flink-runtime-web/interfaces';
 import { OverviewStatisticComponent } from '@flink-runtime-web/pages/overview/statistic/overview-statistic.component';
 import { ApplicationService, OverviewService, StatusService } from '@flink-runtime-web/services';
 
@@ -31,11 +38,16 @@ import { ApplicationService, OverviewService, StatusService } from '@flink-runti
   templateUrl: './overview.component.html',
   styleUrls: ['./overview.component.less'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OverviewStatisticComponent, ApplicationListComponent]
+  imports: [OverviewStatisticComponent, ApplicationListComponent, TopNMetricsComponent]
 })
 export class OverviewComponent implements OnInit, OnDestroy {
   public applicationData$: Observable<ApplicationItem[]>;
   public statisticData$: Observable<OverviewWithApplicationStatistics>;
+
+  // Top N Metrics data
+  public topCpuConsumers: CpuConsumerInfo[] = [];
+  public topBackpressureOperators: BackpressureOperatorInfo[] = [];
+  public topGcIntensiveTasks: GcTaskInfo[] = [];
 
   private readonly destroy$ = new Subject<void>();
 
@@ -43,7 +55,8 @@ export class OverviewComponent implements OnInit, OnDestroy {
     private readonly statusService: StatusService,
     private readonly applicationService: ApplicationService,
     private readonly overviewService: OverviewService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   public ngOnInit(): void {
@@ -75,6 +88,66 @@ export class OverviewComponent implements OnInit, OnDestroy {
       }),
       share()
     );
+
+    // Initialize Top N Metrics demo data
+    this.initTopNMetricsData();
+    this.cdr.markForCheck();
+  }
+
+  private initTopNMetricsData(): void {
+    this.topCpuConsumers = [
+      {
+        subtaskId: 0,
+        taskName: 'Source: Kafka',
+        operatorName: 'Kafka Source',
+        cpuPercentage: 95.5,
+        taskManagerId: 'container_123'
+      },
+      {
+        subtaskId: 1,
+        taskName: 'Map: Process',
+        operatorName: 'ProcessFunction',
+        cpuPercentage: 88.2,
+        taskManagerId: 'container_124'
+      },
+      {
+        subtaskId: 2,
+        taskName: 'Sink: HDFS',
+        operatorName: 'HDFS Sink',
+        cpuPercentage: 82.7,
+        taskManagerId: 'container_125'
+      },
+      {
+        subtaskId: 3,
+        taskName: 'Window',
+        operatorName: 'WindowFunction',
+        cpuPercentage: 76.3,
+        taskManagerId: 'container_123'
+      },
+      {
+        subtaskId: 4,
+        taskName: 'Aggregate',
+        operatorName: 'AggregateFunction',
+        cpuPercentage: 71.9,
+        taskManagerId: 'container_126'
+      }
+    ];
+
+    this.topBackpressureOperators = [
+      { operatorId: 'op_456', operatorName: 'Map', backpressureRatio: 0.85, subtaskId: 1 },
+      { operatorId: 'op_789', operatorName: 'Window', backpressureRatio: 0.72, subtaskId: 3 },
+      { operatorId: 'op_234', operatorName: 'Filter', backpressureRatio: 0.58, subtaskId: 2 },
+      { operatorId: 'op_567', operatorName: 'Join', backpressureRatio: 0.45, subtaskId: 4 },
+      { operatorId: 'op_890', operatorName: 'Aggregate', backpressureRatio: 0.32, subtaskId: 5 }
+    ];
+
+    this.topGcIntensiveTasks = [
+      { taskId: 'task_789', taskName: 'ProcessFunction', gcTimePercentage: 45.2, taskManagerId: 'container_123' },
+      { taskId: 'task_456', taskName: 'WindowFunction', gcTimePercentage: 38.7, taskManagerId: 'container_124' },
+      { taskId: 'task_234', taskName: 'JoinFunction', gcTimePercentage: 32.1, taskManagerId: 'container_125' },
+      { taskId: 'task_567', taskName: 'AggregateFunction', gcTimePercentage: 28.5, taskManagerId: 'container_126' },
+      { taskId: 'task_890', taskName: 'FilterFunction', gcTimePercentage: 24.3, taskManagerId: 'container_127' }
+    ];
   }
 
   public ngOnDestroy(): void {
