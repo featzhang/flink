@@ -63,10 +63,6 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
     private static final SqlReturnTypeInference ARG0_TABLE_RETURN_TYPE =
             opBinding -> opBinding.getOperandType(0);
 
-    /** Return type is the same as the input table operand. */
-    private static final SqlReturnTypeInference ARG0_TABLE_RETURN_TYPE =
-            opBinding -> opBinding.getOperandType(0);
-
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
         // Return type is the same as the input table with the time column marked as ROWTIME
@@ -96,9 +92,7 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
 
             if (operands.size() != 3) {
                 if (throwOnFailure) {
-                    throw callBinding.newValidationError(
-                            org.apache.calcite.runtime.Resources.instance()
-                                    .newError("Expected 3 arguments"));
+                    throw callBinding.newError(new org.apache.calcite.runtime.CalciteException("Expected 3 arguments", null));
                 }
                 return false;
             }
@@ -107,9 +101,7 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
             RelDataType tableType = validator.getValidatedNodeType(operands.get(0));
             if (!tableType.isStruct()) {
                 if (throwOnFailure) {
-                    throw callBinding.newValidationError(
-                            org.apache.calcite.runtime.Resources.instance()
-                                    .newError("First argument must be a TABLE"));
+                    throw callBinding.newError(new org.apache.calcite.runtime.CalciteException("First argument must be a TABLE", null));
                 }
                 return false;
             }
@@ -118,9 +110,7 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
             SqlNode descriptorArg = operands.get(1);
             if (!(descriptorArg instanceof SqlCall)) {
                 if (throwOnFailure) {
-                    throw callBinding.newValidationError(
-                            org.apache.calcite.runtime.Resources.instance()
-                                    .newError("Second argument must be DESCRIPTOR(column_name)"));
+                    throw callBinding.newError(new org.apache.calcite.runtime.CalciteException("Second argument must be DESCRIPTOR(column_name)", null));
                 }
                 return false;
             }
@@ -128,9 +118,7 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
             SqlCall descriptorCall = (SqlCall) descriptorArg;
             if (!descriptorCall.getOperator().getName().equalsIgnoreCase("DESCRIPTOR")) {
                 if (throwOnFailure) {
-                    throw callBinding.newValidationError(
-                            org.apache.calcite.runtime.Resources.instance()
-                                    .newError("Second argument must be DESCRIPTOR(column_name)"));
+                    throw callBinding.newError(new org.apache.calcite.runtime.CalciteException("Second argument must be DESCRIPTOR(column_name)", null));
                 }
                 return false;
             }
@@ -138,9 +126,7 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
             // Extract column name from DESCRIPTOR
             if (descriptorCall.getOperandList().isEmpty()) {
                 if (throwOnFailure) {
-                    throw callBinding.newValidationError(
-                            org.apache.calcite.runtime.Resources.instance()
-                                    .newError("DESCRIPTOR must specify a column name"));
+                    throw callBinding.newError(new org.apache.calcite.runtime.CalciteException("DESCRIPTOR must specify a column name", null));
                 }
                 return false;
             }
@@ -148,9 +134,7 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
             SqlNode columnNode = descriptorCall.getOperandList().get(0);
             if (!(columnNode instanceof SqlIdentifier)) {
                 if (throwOnFailure) {
-                    throw callBinding.newValidationError(
-                            org.apache.calcite.runtime.Resources.instance()
-                                    .newError("DESCRIPTOR argument must be a column identifier"));
+                    throw callBinding.newError(new org.apache.calcite.runtime.CalciteException("DESCRIPTOR argument must be a column identifier", null));
                 }
                 return false;
             }
@@ -169,12 +153,10 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
                     if (typeName != SqlTypeName.TIMESTAMP
                             && typeName != SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE) {
                         if (throwOnFailure) {
-                            throw callBinding.newValidationError(
-                                    org.apache.calcite.runtime.Resources.instance()
-                                            .newError(
-                                                    String.format(
-                                                            "Column '%s' must be of TIMESTAMP or TIMESTAMP_WITH_LOCAL_TIME_ZONE type, got %s",
-                                                            columnName, typeName)));
+                            throw callBinding.newError(new org.apache.calcite.runtime.CalciteException(
+                                    String.format(
+                                            "Column '%s' must be of TIMESTAMP or TIMESTAMP_WITH_LOCAL_TIME_ZONE type, got %s",
+                                            columnName, typeName), null));
                         }
                         return false;
                     }
@@ -185,12 +167,10 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
 
             if (!found) {
                 if (throwOnFailure) {
-                    throw callBinding.newValidationError(
-                            org.apache.calcite.runtime.Resources.instance()
-                                    .newError(
-                                            String.format(
-                                                    "Column '%s' not found in table. Available columns: %s",
-                                                    columnName, tableType.getFieldNames())));
+                    throw callBinding.newError(new org.apache.calcite.runtime.CalciteException(
+                            String.format(
+                                    "Column '%s' not found in table. Available columns: %s",
+                                    columnName, tableType.getFieldNames()), null));
                 }
                 return false;
             }
@@ -202,12 +182,10 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
             if (watermarkTypeName != SqlTypeName.TIMESTAMP
                     && watermarkTypeName != SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE) {
                 if (throwOnFailure) {
-                    throw callBinding.newValidationError(
-                            org.apache.calcite.runtime.Resources.instance()
-                                    .newError(
-                                            String.format(
-                                                    "Watermark expression must return TIMESTAMP type, got %s",
-                                                    watermarkTypeName)));
+                    throw callBinding.newError(new org.apache.calcite.runtime.CalciteException(
+                            String.format(
+                                    "Watermark expression must return TIMESTAMP type, got %s",
+                                    watermarkTypeName), null));
                 }
                 return false;
             }
