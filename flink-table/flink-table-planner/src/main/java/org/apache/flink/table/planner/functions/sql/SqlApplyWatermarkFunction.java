@@ -28,7 +28,6 @@ import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperandCountRange;
 import org.apache.calcite.sql.SqlOperatorBinding;
-import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.type.SqlOperandCountRanges;
 import org.apache.calcite.sql.type.SqlOperandTypeChecker;
@@ -36,7 +35,6 @@ import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
-import org.apache.flink.table.planner.calcite.FlinkTypeFactory;
 
 import java.util.List;
 
@@ -163,10 +161,7 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
             // Validate that the column exists in the table and is of TIMESTAMP type
             boolean found = false;
             for (int i = 0; i < tableType.getFieldCount(); i++) {
-                if (tableType.getFieldList()
-                        .get(i)
-                        .getName()
-                        .equalsIgnoreCase(columnName)) {
+                if (tableType.getFieldList().get(i).getName().equalsIgnoreCase(columnName)) {
                     RelDataType fieldType = tableType.getFieldList().get(i).getType();
                     SqlTypeName typeName = fieldType.getSqlTypeName();
 
@@ -195,8 +190,7 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
                                     .newError(
                                             String.format(
                                                     "Column '%s' not found in table. Available columns: %s",
-                                                    columnName,
-                                                    tableType.getFieldNames())));
+                                                    columnName, tableType.getFieldNames())));
                 }
                 return false;
             }

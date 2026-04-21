@@ -30,9 +30,7 @@ import org.apache.calcite.rex.RexNode
 
 import java.util
 
-/**
- * Stream physical RelNode for [[WatermarkAssigner]].
- */
+/** Stream physical RelNode for [[WatermarkAssigner]]. */
 class StreamPhysicalWatermarkAssigner(
     cluster: RelOptCluster,
     traits: RelTraitSet,

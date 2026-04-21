@@ -26,7 +26,6 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.logical.LogicalTableFunctionScan;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.sql.SqlIdentifier;
 
 /**
  * Planner rule that converts a {@link LogicalTableFunctionScan} with APPLY_WATERMARK function to a
@@ -40,9 +39,7 @@ public class LogicalApplyWatermarkRule extends RelOptRule {
     public static final LogicalApplyWatermarkRule INSTANCE = new LogicalApplyWatermarkRule();
 
     private LogicalApplyWatermarkRule() {
-        super(
-                operand(LogicalTableFunctionScan.class, any()),
-                "LogicalApplyWatermarkRule");
+        super(operand(LogicalTableFunctionScan.class, any()), "LogicalApplyWatermarkRule");
     }
 
     @Override
@@ -117,8 +114,7 @@ public class LogicalApplyWatermarkRule extends RelOptRule {
 
                             @Override
                             public RelNode withHints(
-                                    java.util.List<org.apache.calcite.rel.hint.RelHint>
-                                            hintList) {
+                                    java.util.List<org.apache.calcite.rel.hint.RelHint> hintList) {
                                 return this;
                             }
                         };

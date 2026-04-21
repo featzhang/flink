@@ -32,8 +32,8 @@ import java.util
 import scala.collection.JavaConversions._
 
 /**
- * Sub-class of [[WatermarkAssigner]] that is a relational expression which generates watermarks
- * in Flink logical convention.
+ * Sub-class of [[WatermarkAssigner]] that is a relational expression which generates watermarks in
+ * Flink logical convention.
  */
 class FlinkLogicalWatermarkAssigner(
     cluster: RelOptCluster,
