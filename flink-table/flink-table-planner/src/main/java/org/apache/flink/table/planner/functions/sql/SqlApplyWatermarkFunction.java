@@ -32,6 +32,7 @@ import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.type.SqlOperandCountRanges;
 import org.apache.calcite.sql.type.SqlOperandTypeChecker;
+import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
@@ -54,16 +55,24 @@ public class SqlApplyWatermarkFunction extends SqlFunction {
         super(
                 "APPLY_WATERMARK",
                 SqlKind.OTHER_FUNCTION,
-                null, // Return type inference handled by inferReturnType
+                ARG0_TABLE_RETURN_TYPE, // Return type same as input table
                 null,
                 new OperandMetadataImpl(),
                 SqlFunctionCategory.SYSTEM);
     }
 
+    /** Return type is the same as the input table operand. */
+    private static final SqlReturnTypeInference ARG0_TABLE_RETURN_TYPE =
+            opBinding -> opBinding.getOperandType(0);
+
+    /** Return type is the same as the input table operand. */
+    private static final SqlReturnTypeInference ARG0_TABLE_RETURN_TYPE =
+            opBinding -> opBinding.getOperandType(0);
+
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
         // Return type is the same as the input table with the time column marked as ROWTIME
-        return opBinding.getOperandType(0);
+        return ARG0_TABLE_RETURN_TYPE.inferReturnType(opBinding);
     }
 
     @Override
