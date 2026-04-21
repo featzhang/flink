@@ -65,8 +65,8 @@ class StreamPhysicalWatermarkAssigner(
   override def translateToExecNode(): ExecNode[_] = {
     new StreamExecWatermarkAssigner(
       unwrapTableConfig(this),
-      rowtimeFieldIndex,
       watermarkExpr,
+      rowtimeFieldIndex,
       InputProperty.DEFAULT,
       FlinkTypeFactory.toLogicalRowType(getRowType),
       getRelDetailedDescription)
