@@ -49,14 +49,14 @@ public class LogicalApplyWatermarkRule extends RelOptRule {
     public boolean matches(RelOptRuleCall call) {
         LogicalTableFunctionScan scan = call.rel(0);
         RexNode rexCall = scan.getCall();
-        
+
         if (!(rexCall instanceof RexCall)) {
             return false;
         }
 
         RexCall call0 = (RexCall) rexCall;
         String functionName = call0.getOperator().getName();
-        
+
         return functionName.equalsIgnoreCase("APPLY_WATERMARK");
     }
 
@@ -71,15 +71,15 @@ public class LogicalApplyWatermarkRule extends RelOptRule {
         }
 
         // Operand 0: table expression (already converted to RelNode via scan.getInputs())
-        // Operand 1: DESCRIPTOR(column_name) 
+        // Operand 1: DESCRIPTOR(column_name)
         // Operand 2: watermark expression
 
         RelNode inputRel = scan.getInputs().get(0);
-        
+
         // Extract column index from DESCRIPTOR
         RexNode descriptorArg = applyWatermarkCall.getOperands().get(1);
         int rowtimeFieldIndex = extractColumnIndex(inputRel, descriptorArg);
-        
+
         if (rowtimeFieldIndex < 0) {
             return; // Column not found
         }
@@ -147,7 +147,7 @@ public class LogicalApplyWatermarkRule extends RelOptRule {
 
         // The column name is the first operand of DESCRIPTOR
         RexNode columnRef = descriptorCall.getOperands().get(0);
-        
+
         // Extract column name
         String columnName;
         if (columnRef instanceof org.apache.calcite.rex.RexInputRef) {
