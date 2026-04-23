@@ -44,9 +44,9 @@ export class JobTopnMetricComponent implements OnInit, OnDestroy {
     this.jobLocalService
       .jobDetailChanges()
       .pipe(takeUntil(this.destroy$))
-      .subscribe(job => {
+      .subscribe(_job => {
         // Initialize Top N Metrics demo data based on job
-        this.initTopNMetricsData(job);
+        this.initTopNMetricsData();
         this.cdr.markForCheck();
       });
   }
@@ -56,8 +56,7 @@ export class JobTopnMetricComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private initTopNMetricsData(job: Record<string, unknown>): void {
+  private initTopNMetricsData(): void {
     this.topCpuConsumers = [
       {
         subtaskId: 0,

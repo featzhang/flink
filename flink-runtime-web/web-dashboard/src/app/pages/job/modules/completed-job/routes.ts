@@ -24,9 +24,9 @@ import { ClusterConfigGuard } from '@flink-runtime-web/pages/job/modules/complet
 import { CompletedJobSubtasksTableActionComponent } from '@flink-runtime-web/pages/job/modules/completed-job/subtasks-table-action/completed-job-subtasks-table-action.component';
 import { CompletedJobTaskmanagersTableActionComponent } from '@flink-runtime-web/pages/job/modules/completed-job/taskmanagers-table-action/completed-job-taskmanagers-table-action.component';
 import {
-    JOB_OVERVIEW_MODULE_CONFIG,
-    JOB_OVERVIEW_MODULE_DEFAULT_CONFIG,
-    JobOverviewModuleConfig
+  JOB_OVERVIEW_MODULE_CONFIG,
+  JOB_OVERVIEW_MODULE_DEFAULT_CONFIG,
+  JobOverviewModuleConfig
 } from '@flink-runtime-web/pages/job/overview/job-overview.config';
 import { StatusService } from '@flink-runtime-web/services';
 
