@@ -17,7 +17,7 @@
  */
 
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 
 import { CpuConsumerInfo, BackpressureOperatorInfo, GcTaskInfo } from '@flink-runtime-web/interfaces';
 import { NzCardModule } from 'ng-zorro-antd/card';
@@ -33,14 +33,10 @@ import { NzTableModule } from 'ng-zorro-antd/table';
   standalone: true,
   imports: [CommonModule, NzCardModule, NzGridModule, NzTableModule, NzProgressModule]
 })
-export class TopNMetricsComponent implements OnChanges {
+export class TopNMetricsComponent {
   @Input() topCpuConsumers: CpuConsumerInfo[] = [];
   @Input() topBackpressureOperators: BackpressureOperatorInfo[] = [];
   @Input() topGcIntensiveTasks: GcTaskInfo[] = [];
-
-  ngOnChanges(changes: SimpleChanges): void {
-    console.log('TopN metrics updated:', changes);
-  }
 
   formatPercentage(value: number): string {
     return `${value.toFixed(2)}%`;
